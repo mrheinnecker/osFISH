@@ -19,13 +19,13 @@ head -n 3 $species_file | while read spec
 do
     echo "Processing species: $spec"
 
-    bsub \
-      -W 1:00 \
-      -M 5000 \
-      -e "/scratch/rheinnec/logs/log_probedesign_$spec.txt" \
-      -o "/scratch/rheinnec/logs/out_probedesign_$spec.txt" \
-    singularity exec --bind /media/rheinnec/OS $container \
-      $wrkdir/process_species.sh "$full_database" "$outdir" "$spec"
+sbatch \
+    -J "probe_design_$spec" \
+    -t 00:60:00 \
+    --mem 5000 \
+    -e "/scratch/rheinnec/logs/log_probedesign_$spec.txt" \
+    -o "/scratch/rheinnec/logs/out_probedesign_$spec.txt" \
+    $wrkdir/container.sh "$full_database" "$outdir" "$spec" "$wrkdir"
 done
 
 
