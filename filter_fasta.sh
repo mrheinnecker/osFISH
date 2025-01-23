@@ -10,18 +10,47 @@ full_database="/home/rheinnec/projects/osCLEM/pr2_version_5.0.0_SSU_taxo_long.fa
 
 species_file="/home/rheinnec/projects/osCLEM/RCC_cultures_ordered.txt"
 
+projdir="/home/rheinnec/projects/osCLEM"
+
 outdir="/home/rheinnec/projects/osCLEM/species_seq"
 
 
-cat $species_file | while read spec 
+#cat $species_file | while read spec 
+head -n 2 $species_file | while read spec 
 do
+
+spec="Akashiwo_sanguinea"
 
 echo $spec
 
-sequenceSelect.py -f $full_database -o "${outdir}/${spec}.fasta" -p $spec -a k -v
+target_fasta="${outdir}/${spec}_target.fasta"
+reference_fasta="${outdir}/${spec}_reference.fasta"
+
+target_fasta_sl="${outdir}/${spec}_target_sl.fasta"
+reference_fasta_sl="${outdir}/${spec}_reference_sl.fasta"
+
+## filter full database for relevant species
+sequenceSelect.py -f $full_database -o $target_fasta -p $spec -a k -v
+sequenceSelect.py -f $full_database -o $reference_fasta -p $spec -a r -v
+## make single line fasta file instead of multiline sequence
+multi2linefasta.py -f $target_fasta -o $target_fasta_sl
+multi2linefasta.py -f $reference_fasta -o $reference_fasta_sl
+
+
+findOligo -t $target_fasta_sl -r $reference_fasta_sl -o probes -l '18-22' -m 0.8 -s 0.001  
 
 
 done
+
+
+
+filtered_fasta="~/projects/osCLEM/species_seq/Akashiwo_sanguinea.fasta"
+
+single_line_fasta="~/projects/osCLEM/test/Akashiwo_sanguinea_single_line.fasta"
+
+
+multi2linefasta.py -f $filtered_fasta -o $single_line_fasta
+
 
 
 
