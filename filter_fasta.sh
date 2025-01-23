@@ -15,11 +15,11 @@ projdir="/home/rheinnec/projects/osCLEM"
 outdir="/home/rheinnec/projects/osCLEM/species_seq"
 
 
-#cat $species_file | while read spec 
-head -n 2 $species_file | while read spec 
+cat $species_file | while read spec 
+#head -n 2 $species_file | while read spec 
 do
 
-spec="Akashiwo_sanguinea"
+#spec="Akashiwo_sanguinea"
 
 echo $spec
 
@@ -36,40 +36,28 @@ sequenceSelect.py -f $full_database -o $reference_fasta -p $spec -a r -v
 multi2linefasta.py -f $target_fasta -o $target_fasta_sl
 multi2linefasta.py -f $reference_fasta -o $reference_fasta_sl
 
+## find oligos... not parallelized: time intensive
+findOligo -t $target_fasta_sl -r $reference_fasta_sl -o "${outdir}/${spec}_probes" -l '18-22' -m 0.8 -s 0.001  
 
-findOligo -t $target_fasta_sl -r $reference_fasta_sl -o probes -l '18-22' -m 0.8 -s 0.001  
+## test oligos again agiants whole reference database if the match other sequences if 1 or two mismatches are allowed... 
+## i dont fuly understand what the output tells me
+testOligo -r $reference_fasta_sl -p "${outdir}/${spec}_probes.fasta" -o "${outdir}/${spec}_probes_tested.tsv"  
 
+## now the accesability is checked... two step process... first is fast
+alignOligo -t $target_fasta_sl -p "${outdir}/${spec}_probes.fasta" -o "${outdir}/${spec}_probes_aligned.fasta"
+
+## secod  step... fast... output also not fully understood but i get what it is trying to do
+rateAccess -f "${outdir}/${spec}_probes_aligned.fasta" -o "${outdir}/${spec}_probes_access.tsv" 
+
+
+## luckily there is a script which automatically merges all the info created before and lets you select the probes
+## does basically: left_join by oligoN id
+bindLogs -f "${outdir}/${spec}_probes.tsv" "${outdir}/${spec}_probes_tested.tsv" "${outdir}/${spec}_probes_access.tsv" -o "${outdir}/${spec}_probes_log.tsv" -r  
+
+## this filters based on desired criteria
+filterLog -l "${outdir}/${spec}_probes_log.tsv" -s "0.4" -M "0.005" -b "0.4"  
+
+selectLog -l "${outdir}/${spec}_probes_log_filtered.tsv" -N "4"  
 
 done
-
-
-
-filtered_fasta="~/projects/osCLEM/species_seq/Akashiwo_sanguinea.fasta"
-
-single_line_fasta="~/projects/osCLEM/test/Akashiwo_sanguinea_single_line.fasta"
-
-
-multi2linefasta.py -f $filtered_fasta -o $single_line_fasta
-
-
-
-
-# # Output file
-# filtered_fasta="filtered_sequences.fasta"
-
-# # Create a temporary regex file from the species list (accounting for minor spelling differences)
-# # Convert spaces to match any whitespace and add case-insensitivity.
-# awk '{print tolower($0)}' "$species_file" | \
-# sed -E 's/ /\\s+/g' | \
-# sed -E 's/(.*)/\(^|[>|_])\1(\\s|\$)/' > temp_species_patterns.txt
-
-# # Filter FASTA file for matching headers using the generated regex
-# grep -i -A 1 -f temp_species_patterns.txt "$fasta_file" | \
-# grep -v -- "^--$" > "$filtered_fasta"
-
-# # Clean up temporary file
-# rm temp_species_patterns.txt
-
-# # Completion message
-# echo "Filtered sequences saved to: $filtered_fasta"
 
