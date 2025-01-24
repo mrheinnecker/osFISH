@@ -7,7 +7,13 @@ spec="$3"
 
 outdir="${outdir_raw}/${spec}"
 
+echo $outdir
+
+echo $outdir_raw
+
 mkdir $outdir
+
+export TMPDIR="/scratch/rheinnec/tmp"
 
 echo "Processing: $spec"
 
@@ -33,6 +39,8 @@ testOligo -r "$reference_fasta_sl" -p "${outdir}/${spec}_probes.fasta" -o "${out
 
 ## Check accessibility (two-step process)
 alignOligo -t "$target_fasta_sl" -p "${outdir}/${spec}_probes.fasta" -o "${outdir}/${spec}_probes_aligned.fasta"
+
+
 rateAccess -f "${outdir}/${spec}_probes_aligned.fasta" -o "${outdir}/${spec}_probes_access.tsv" 
 
 ## Merge logs and select probes
