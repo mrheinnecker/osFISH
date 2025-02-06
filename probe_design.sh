@@ -6,9 +6,9 @@
 
 
 full_database="/g/schwab/Marco/projects/osCLEM/pr2_version_5.0.0_SSU_taxo_long.fasta"
-species_file="/g/schwab/Marco/projects/osCLEM/RCC_cultures_ordered.txt"
+species_file="/g/schwab/Marco/projects/osCLEM/RCC_cultures_ordered_secondary.txt"
 projdir="/g/schwab/Marco/projects/osCLEM"
-outdir="/scratch/rheinnec/osCLEM/species_seq"
+outdir="/scratch/rheinnec/osFISH/species_seq"
 
 wrkdir="/g/schwab/Marco/repos/osCLEM"
 
@@ -21,11 +21,11 @@ do
 
 sbatch \
     -J "probe_design_$spec" \
-    -t 03:00:00 \
+    -t 10:00:00 \
     --mem 5000 \
     -e "/scratch/rheinnec/logs/log_probedesign_$spec.txt" \
     -o "/scratch/rheinnec/logs/out_probedesign_$spec.txt" \
-    $wrkdir/container.sh "$full_database" "$outdir" "$spec" "$wrkdir" "$container"
+    $wrkdir/container.sh "$full_database" "$outdir" "$spec" "$wrkdir" "$container" 0.8 0.001
 done
 
 
