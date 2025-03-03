@@ -6,6 +6,7 @@ outdir_raw="$2"
 spec="$3"
 abundance_target="$4"
 abundance_ref="$5"
+bp="$6"
 
 outdir="${outdir_raw}/${spec}"
 
@@ -34,7 +35,7 @@ multi2linefasta.py -f "$target_fasta" -o "$target_fasta_sl"
 multi2linefasta.py -f "$reference_fasta" -o "$reference_fasta_sl"
 
 ## Find oligos (time-intensive)
-findOligo -t "$target_fasta_sl" -r "$reference_fasta_sl" -o "${outdir}/${spec}_probes" -l '35-40' -m $abundance_target -s $abundance_ref  
+findOligo -t "$target_fasta_sl" -r "$reference_fasta_sl" -o "${outdir}/${spec}_probes" -l $bp -m $abundance_target -s $abundance_ref  
 
 ## Test oligos against the whole reference database
 testOligo -r "$reference_fasta_sl" -p "${outdir}/${spec}_probes.fasta" -o "${outdir}/${spec}_probes_tested.tsv"  
