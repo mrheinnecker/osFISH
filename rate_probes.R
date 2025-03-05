@@ -77,6 +77,9 @@ anno_species <- full_probes %>%
     full_best4 %>% select(identifier, species) %>% mutate(best4=T)
   )
 
+#write_tsv(anno_species, file = "/g/schwab/Marco/projects/osFISH/probe_design/oligoNdesign_per_species/combined_probes_all_species.tsv")
+
+
 
 anno_species %>%
   filter(hitsR_abs<50) %>%
@@ -88,17 +91,63 @@ ranked <- anno_species %>%
   #group_by() %>%
   #filter(mismatch1_abs<1000) %>%
   group_by(species) %>%
+  mutate(diff_tm=abs(66-Tm)) %>%
+  filter(diff_tm<5) %>%
   arrange(
     hitsR_abs,
-    mismatch1_abs
+    mismatch1_abs,
+    class
     #desc(class)
   ) %>%
   mutate(
     rank_mismatch1_abs=seq(1,length(species))
+  ) 
+
+
+## load manually selected prio 1 probes
+it1_probes_raw <- read_tsv("/g/schwab/rheinnec/projects/osFISH/probes_it1.tsv", col_names = c("species", "identifier")) %>%
+  mutate(it1=T) %>%
+  left_join(ranked) #%>%
+
+it1_probes <- it1_probes_raw %>%
+  select(species, identifier, it1, it1_start_position=start_position)
+
+
+pot_secondary_probe <- ranked %>%
+  left_join(it1_probes %>% select(-it1_start_position), by=c("species", "identifier")) %>%
+  filter(is.na(it1)) %>%
+  filter(between(Tm, min(it1_probes_raw$Tm), max(it1_probes_raw$Tm))) %>%
+  left_join(it1_probes %>% select(-identifier, -it1), by="species") %>%
+  mutate(
+    pos_diff=abs(start_position-it1_start_position)
   ) %>%
+  filter(pos_diff>50) %>%
+  group_by(species)
+  
+
+
+
+pot_secondary_probe %>%
+  group_by(species) %>%
+  tally()
+
+
+
+best20 <- ranked %>% filter(rank_mismatch1_abs<3)
+
+ranked %>% filter(rank_mismatch1_abs<30) %>%
+  group_by(species, region) %>%
+  tally() %>%
+  group_by(species) %>%
+  tally() %>%
+  arrange(n)
+  #View()
+  
+
+#%>%
   arrange(
     #desc(mismatch1_abs),
-    desc(class)
+    class
   ) %>%
   mutate(
     rank_class=seq(1,length(species))
@@ -120,9 +169,10 @@ check <- ranked %>%
   arrange(species)
 
 
-write_tsv(check, file="/g/schwab/Marco/projects/osFISH/ov_table_probes.tsv")
+write_tsv(check, file="/g/schwab/Marco/projects/osFISH/ov_table_probes_new.tsv")
 
-
+ranked %>%
+  filter(species %in% c("Heterocapsa_rotundata", "Karenia_mikimotoi"))
 
 
 
