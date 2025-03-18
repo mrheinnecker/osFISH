@@ -1,6 +1,6 @@
 #!R
 
-
+library(parallel)
 library(getopt)
 library(Biostrings)
 library(tidyverse)
@@ -24,8 +24,8 @@ opt = getopt(spec)
 # opt <- tibble(
 #   file_target="/g/schwab/Marco/projects/osFISH/test/Heterocapsa_rotundata_seq_all.fasta",
 #   file_reference="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta",
-#   temp_min=55, 
-#   temp_max=75, 
+#   temp_min=55,
+#   temp_max=75,
 #   length=40,
 #   length_range=3
 # )
@@ -94,7 +94,7 @@ all_possible_probes <- lapply(seq(1, length(rel_seq)), function(nSEQ){
   mutate(id=paste0("p", seq(1, nrow(.))))
            
 
-remapped <- lapply(seq(1, nrow(all_possible_probes)), function(n){
+remapped <- mclapply(seq(1, nrow(all_possible_probes)), function(n){
 #remapped <- lapply(seq(1, 10), function(n){
   
     
@@ -104,19 +104,27 @@ remapped <- lapply(seq(1, nrow(all_possible_probes)), function(n){
   
   target_hits <- rel_seq[which(elementNROWS(vmatchPattern(pattern, rel_seq, max.mismatch = 0))>0)] %>% names()
   target_hits_mm1 <- rel_seq[which(elementNROWS(vmatchPattern(pattern, rel_seq, max.mismatch = 1))>0)] %>% names()
-  matches_0 <- ref_seq[which(elementNROWS(vmatchPattern(pattern, ref_seq, max.mismatch = 0))>0)] %>% names()
-  matches_1 <- ref_seq[which(elementNROWS(vmatchPattern(pattern, ref_seq, max.mismatch = 1))>0)] %>% names()
+  matches_0 <- filtered_seq[which(elementNROWS(vmatchPattern(pattern, filtered_seq, max.mismatch = 0))>0)] %>% names()
+  matches_1 <- filtered_seq[which(elementNROWS(vmatchPattern(pattern, filtered_seq, max.mismatch = 1))>0)] %>% names()
+  matches_2 <- filtered_seq[which(elementNROWS(vmatchPattern(pattern, filtered_seq, max.mismatch = 2))>0)] %>% names()
   #matches_2 <- ref_seq[which(elementNROWS(vmatchPattern(pattern, ref_seq, max.mismatch = 2))>0)] %>% names()
   return(
     tibble(id=all_possible_probes[[n,"id"]],
            th_mm0=length(target_hits),
            th_mm1=length(target_hits_mm1),
+           th_mm0_perc=length(target_hits)/length(rel_seq),
+           th_mm1_perc=length(target_hits_mm1)/length(rel_seq),
            rh_mm0=length(matches_0),
-           rh_mm1=length(matches_1))
+           rh_mm1=length(matches_1),
+           rh_mm2=length(matches_2),
+           rh_mm0_perc=length(matches_0)/length(filtered_seq),
+           rh_mm1_perc=length(matches_1)/length(filtered_seq),
+           rh_mm2_perc=length(matches_2)/length(filtered_seq),
+           )
   )
-}) %>%
+}, mc.cores=detectCores()-1) %>%
   bind_rows() %>%
-  left_join(all_possible_probes)
+  left_join(all_possible_probes %>% select(-diff_to_center))
 
 
 write_tsv(remapped, file=file.path(str_replace(opt$file_target, "_seq_all.fasta", "_probes.tsv")))
