@@ -1,3 +1,5 @@
+#!R
+
 
 library(getopt)
 library(Biostrings)
@@ -12,23 +14,23 @@ spec = matrix(c(
   'temp_min' , 'a', 1, "double",
   'temp_max' , 'b', 1, "double",
   'length' , 'l', 1, "double",
-  'length_range' , 'l', 1, "double"
+  'length_range' , 'm', 1, "double"
 ), byrow=TRUE, ncol=4)
 
 
 opt = getopt(spec)
 
 
-opt <- tibble(
-  file_target="/g/schwab/Marco/projects/osFISH/test/Heterocapsa_rotundata_seq_all.fasta",
-  file_reference="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta",
-  temp_min=55, 
-  temp_max=75, 
-  length=40,
-  length_range=3
-)
+# opt <- tibble(
+#   file_target="/g/schwab/Marco/projects/osFISH/test/Heterocapsa_rotundata_seq_all.fasta",
+#   file_reference="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta",
+#   temp_min=55, 
+#   temp_max=75, 
+#   length=40,
+#   length_range=3
+# )
 
-
+message("launching probe design")
 
 probe_length <- as.numeric(opt$length)+as.numeric(opt$length_range)
 rel_seq <- readDNAStringSet(opt$file_target)
@@ -117,7 +119,7 @@ remapped <- lapply(seq(1, nrow(all_possible_probes)), function(n){
   left_join(all_possible_probes)
 
 
-write_tsv(remapped, file=)
+write_tsv(remapped, file=file.path(str_replace(opt$file_target, "_seq_all.fasta", "_probes.tsv")))
 
 
 
