@@ -21,14 +21,14 @@ spec = matrix(c(
 opt = getopt(spec)
 
 
-# opt <- tibble(
-#   file_target="/g/schwab/Marco/projects/osFISH/test/Heterocapsa_rotundata_seq_all.fasta",
-#   file_reference="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta",
-#   temp_min=55,
-#   temp_max=75,
-#   length=40,
-#   length_range=3
-# )
+opt <- tibble(
+  file_target="/g/schwab/Marco/projects/osFISH/test2/Prorocentrum_micans_seq_all.fasta",
+  file_reference="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta",
+  temp_min=55,
+  temp_max=75,
+  length=40,
+  length_range=3
+)
 
 message("launching probe design")
 
@@ -52,10 +52,11 @@ if(length(filtered_seq)==length(ref_seq)){
 
 
 all_possible_probes <- lapply(seq(1, length(rel_seq)), function(nSEQ){
-  
+  print(paste(nSEQ, "/",length(rel_seq)))
   char_seq <- as.character(rel_seq[[nSEQ]])
   
   lapply(seq(1, nchar(char_seq)-probe_length), function(START){
+    #cat(START, "\n")
     tibble(start=START,
           seq=lapply(seq(as.numeric(opt$length)-as.numeric(opt$length_range),
                          as.numeric(opt$length)+as.numeric(opt$length_range)),
@@ -77,11 +78,20 @@ all_possible_probes <- lapply(seq(1, length(rel_seq)), function(nSEQ){
 }) %>%
   bind_rows() %>%
   
+
+
+
+
+
+#test <- all_possible_probes %>%
+  arrange(fasta_entry, start) %>%
   group_by(seq) %>%
   summarize(
-    start=min(start)[1],
-    fasta_entry=fasta_entry[which(.$start==min(.$start))][1]
+    start=start[1],
+    fasta_entry=fasta_entry[1],
+    all_fasta_entry=paste(fasta_entry, collapse = ", ")
   ) %>%
+  
   rowwise() %>%
   mutate(len=nchar(seq)) %>%
   mutate(tm=64.9 + 41*(str_count(seq, "C|G") - 16.4) / len,
@@ -90,6 +100,7 @@ all_possible_probes <- lapply(seq(1, length(rel_seq)), function(nSEQ){
   ## filter within each fasta entry (sep. sequence)
   group_by(fasta_entry, start) %>%
   filter(diff_to_center==min(diff_to_center)) %>%
+  filter(len==max(len)) %>%
   ungroup() %>%
   mutate(id=paste0("p", seq(1, nrow(.))))
            
@@ -122,7 +133,7 @@ remapped <- mclapply(seq(1, nrow(all_possible_probes)), function(n){
            rh_mm2_perc=length(matches_2)/length(filtered_seq),
            )
   )
-}, mc.cores=detectCores()-1) %>%
+}, mc.cores=min(10, detectCores()-1)) %>%
   bind_rows() %>%
   left_join(all_possible_probes %>% select(-diff_to_center))
 
