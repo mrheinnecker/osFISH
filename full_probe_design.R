@@ -21,14 +21,16 @@ spec = matrix(c(
 opt = getopt(spec)
 
 
-opt <- tibble(
-  file_target="/g/schwab/Marco/projects/osFISH/test2/Prorocentrum_micans_seq_all.fasta",
-  file_reference="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta",
-  temp_min=55,
-  temp_max=75,
-  length=40,
-  length_range=3
-)
+# opt <- tibble(
+#   file_target="/g/schwab/Marco/projects/osFISH/test2/Prorocentrum_micans_seq_all.fasta",
+#   file_reference="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta",
+#   temp_min=55,
+#   temp_max=75,
+#   length=40,
+#   length_range=3
+# )
+
+t0 <- Sys.time()
 
 message("launching probe design")
 
@@ -140,137 +142,6 @@ remapped <- mclapply(seq(1, nrow(all_possible_probes)), function(n){
 
 write_tsv(remapped, file=file.path(str_replace(opt$file_target, "_seq_all.fasta", "_probes.tsv")))
 
+t1 <- Sys.time()
 
-
-
-#         
-# 
-# rRNA_s_cerevisiae=DNAString("TATCTGGTTGATCCTGCCAGTAGTCATATGCTTGTCTCAAAGATTAAGCCATGCATGTCTAAGTATAAGCAATTTATACAGTGAAACTGCGAATGGCTCATTAAATCAGTTATCGTTTATTTGATAGTTCCTTTACTACATGGTATAACTGTGGTAATTCTAGAGCTAATACATGCTTAAAATCTCGACCCTTTGGAAGAGATGTATTTATTAGATAAAAAATCAATGTCTTCGGACTCTTTGATGATTCATAATAACTTTTCGAATCGCATGGCCTTGTGCTGGCGATGGTTCATTCAAATTTCTGCCCTATCAACTTTCGATGGTAGGATAGTGGCCTACCATGGTTTCAACGGGTAACGGGGAATAAGGGTTCGATTCCGGAGAGGGAGCCTGAGAAACGGCTACCACATCCAAGGAAGGCAGCAGGCGCGCAAATTACCCAATCCTAATTCAGGGAGGTAGTGACAATAAATAACGATACAGGGCCCATTCGGGTCTTGTAATTGGAATGAGTACAATGTAAATACCTTAACGAGGAACAATTGGAGGGCAAGTCTGGTGCCAGCAGCCGCGGTAATTCCAGCTCCAATAGCGTATATTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTTGAACTTTGGGCCCGGTTGGCCGGTCCGATTTTTTCGTGTACTGGATTTCCAACGGGGCCTTTCCTTCTGGCTAACCTTGAGTCCTTGTGGCTCTTGGCGAACCAGGACTTTTACTTTGAAAAAATTAGAGTGTTCAAAGCAGGCGTATTGCTCGAATATATTAGCATGGAATAATAGAATAGGACGTTTGGTTCTATTTTGTTGGTTTCTAGGACCATCGTAATGATTAATAGGGACGGTCGGGGGCATCAGTATTCAATTGTCAGAGGTGAAATTCTTGGATTTATTGAAGACTAACTACTGCGAAAGCATTTGCCAAGGACGTTTTCATTAATCAAGAACGAAAGTTAGGGGATCGAAGATGATCAGATACCGTCGTAGTCTTAACCATAAACTATGCCGACTAGGGATCGGGTGGTGTTTTTTTAATGACCCACTCGGCACCTTACGAGAAATCAAAGTCTTTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTGAAACTTAAAGGAATTGACGGAAGGGCACCACCAGGAGTGGAGCCTGCGGCTTAATTTGACTCAACACGGGGAAACTCACCAGGTCCAGACACAATAAGGATTGACAGATTGAGAGCTCTTTCTTGATTTTGTGGGTGGTGGTGCATGGCCGTTCTTAGTTGGTGGAGTGATTTGTCTGCTTAATTGCGATAACGAACGAGACCTTAACCTACTAAATAGTGGTGCTAGCATTTGCTGGTTATCCACTTCTTAGAGGGACTATCGGTTTCAAGCCGATGGAAGTTTGAGGCAATAACAGGTCTGTGATGCCCTTAGACGTTCTGGGCCGCACGCGCGCTACACTGACGGAGCCAGCGAGTCTAACCTTGGCCGAGAGGTCTTGGTAATCTTGTGAAACTCCGTCGTGCTGGGGATAGAGCATTGTAATTATTGCTCTTCAACGAGGAATTCCTAGTAAGCGCAAGTCATCAGCTTGCGTTGATTACGTCCCTGCCCTTTGTACACACCGCCCGTCGCTAGTACCGATTGAATGGCTTAGTGAGGCCTCAGGATCTGCTTAGAGAAGGGGGCAACTCCATCTCAGAGCGGAGAATTTGGACAAACTTGGTCATTTAGAGGAACTAAAAGTCGTAACAAGGTTTCCGTAGGTGAACCTGCGGAAGGATCATTA")
-# 
-# 
-# probe_length <- 42
-# 
-# 
-# 
-# targets_of_interest <- "Glenodinium
-# Brandtodinium_nutriculum
-# Heterocapsa_rotundata
-# Azadinium_spinosum
-# Akashiwo_sanguinea
-# Protodinium
-# Gymnodinium_impudicum
-# Karenia_papiloniaceae
-# Karenia_mikimotoi
-# Karlodinium_micrum
-# Takayama_helix
-# Gyrodinium_aureolum
-# Amphidinium_carterae
-# Amphidinium_massartii
-# Margalefidinium
-# Oxyrhissis_marina
-# Prorocentrum_micans
-# Gonyaulax_spinifera
-# Pyrocystis_lunula
-# Pyrocystis_fusiformis" %>% str_split("\n") %>% unlist()
-# 
-# combined_results <- lapply(targets_of_interest, function(TARGET){
-#   
-#   print(TARGET)
-#   
-#   ooi <-  tolower(TARGET)
-#   
-#   rel_seq <- sequences[which(str_detect(tolower(names(sequences)), ooi))]
-#   
-#   if(length(rel_seq)==0){
-#     
-#     message("Target not found in fasta file")
-#     
-#   } else {
-#     
-#     
-#     
-#     ref_seq <- sequences[-which(str_detect(tolower(names(sequences)), ooi))]
-#     
-#     
-#     
-#     all_possible_probes <- lapply(seq(1, length(rel_seq)), function(nSEQ){
-#       
-#       #print(SEQ[[1]])
-#       
-#       char_seq <- as.character(rel_seq[[nSEQ]])
-#       
-#       lapply(seq(1, nchar(char_seq)-probe_length), function(START){
-#         c(start=START,
-#         seq=str_sub(char_seq, START, START+probe_length-1)
-#         ) %>%
-#           return()
-#         
-#       }) %>% bind_rows() %>%
-#         mutate(fasta_entry=nSEQ) %>%
-#         bind_rows() %>%
-#         return()
-#       
-#     }) %>%
-#       bind_rows() %>%
-#       mutate(tm=64.9 + 41*(str_count(seq, "C|G") - 16.4) / probe_length,
-#              tm_minus_1=64.9 + 41*(str_count(str_sub(seq, 1, (probe_length-1)), "C|G") - 16.4) / probe_length-1,
-#              tm_minus_2=64.9 + 41*(str_count(str_sub(seq, 1, (probe_length-2)), "C|G") - 16.4) / probe_length-2,
-#              target=paste(TARGET, fasta_entry, sep="_")
-#              )
-#     
-#     return(all_possible_probes)
-#   }
-# }) %>%
-#   bind_rows()
-# 
-# 
-# 
-# 
-# lapply(seq(1, length(test)), function(n){
-#   
-#   pattern <- test[[n,"seq"]]
-#   
-#   print(n)
-#     
-#   target_hits <- rel_seq[which(elementNROWS(vmatchPattern(pattern, rel_seq, max.mismatch = 0))>0)] %>% names()
-#   matches_0 <- ref_seq[which(elementNROWS(vmatchPattern(pattern, ref_seq, max.mismatch = 0))>0)] %>% names()
-#   matches_1 <- ref_seq[which(elementNROWS(vmatchPattern(pattern, ref_seq, max.mismatch = 1))>0)] %>% names()
-#   matches_2 <- ref_seq[which(elementNROWS(vmatchPattern(pattern, ref_seq, max.mismatch = 2))>0)] %>% names()
-# 
-# })
-# 
-# pattern <- "AAAAAGCTCGTAGTTGGATTTCTGCTGAGGATGACCGGTCC"
-# 
-# 
-# ### this is how we can do alignment inside R
-# rRNA_s_cerevisiae="TATCTGGTTGATCCTGCCAGTAGTCATATGCTTGTCTCAAAGATTAAGCCATGCATGTCTAAGTATAAGCAATTTATACAGTGAAACTGCGAATGGCTCATTAAATCAGTTATCGTTTATTTGATAGTTCCTTTACTACATGGTATAACTGTGGTAATTCTAGAGCTAATACATGCTTAAAATCTCGACCCTTTGGAAGAGATGTATTTATTAGATAAAAAATCAATGTCTTCGGACTCTTTGATGATTCATAATAACTTTTCGAATCGCATGGCCTTGTGCTGGCGATGGTTCATTCAAATTTCTGCCCTATCAACTTTCGATGGTAGGATAGTGGCCTACCATGGTTTCAACGGGTAACGGGGAATAAGGGTTCGATTCCGGAGAGGGAGCCTGAGAAACGGCTACCACATCCAAGGAAGGCAGCAGGCGCGCAAATTACCCAATCCTAATTCAGGGAGGTAGTGACAATAAATAACGATACAGGGCCCATTCGGGTCTTGTAATTGGAATGAGTACAATGTAAATACCTTAACGAGGAACAATTGGAGGGCAAGTCTGGTGCCAGCAGCCGCGGTAATTCCAGCTCCAATAGCGTATATTAAAGTTGTTGCAGTTAAAAAGCTCGTAGTTGAACTTTGGGCCCGGTTGGCCGGTCCGATTTTTTCGTGTACTGGATTTCCAACGGGGCCTTTCCTTCTGGCTAACCTTGAGTCCTTGTGGCTCTTGGCGAACCAGGACTTTTACTTTGAAAAAATTAGAGTGTTCAAAGCAGGCGTATTGCTCGAATATATTAGCATGGAATAATAGAATAGGACGTTTGGTTCTATTTTGTTGGTTTCTAGGACCATCGTAATGATTAATAGGGACGGTCGGGGGCATCAGTATTCAATTGTCAGAGGTGAAATTCTTGGATTTATTGAAGACTAACTACTGCGAAAGCATTTGCCAAGGACGTTTTCATTAATCAAGAACGAAAGTTAGGGGATCGAAGATGATCAGATACCGTCGTAGTCTTAACCATAAACTATGCCGACTAGGGATCGGGTGGTGTTTTTTTAATGACCCACTCGGCACCTTACGAGAAATCAAAGTCTTTGGGTTCTGGGGGGAGTATGGTCGCAAGGCTGAAACTTAAAGGAATTGACGGAAGGGCACCACCAGGAGTGGAGCCTGCGGCTTAATTTGACTCAACACGGGGAAACTCACCAGGTCCAGACACAATAAGGATTGACAGATTGAGAGCTCTTTCTTGATTTTGTGGGTGGTGGTGCATGGCCGTTCTTAGTTGGTGGAGTGATTTGTCTGCTTAATTGCGATAACGAACGAGACCTTAACCTACTAAATAGTGGTGCTAGCATTTGCTGGTTATCCACTTCTTAGAGGGACTATCGGTTTCAAGCCGATGGAAGTTTGAGGCAATAACAGGTCTGTGATGCCCTTAGACGTTCTGGGCCGCACGCGCGCTACACTGACGGAGCCAGCGAGTCTAACCTTGGCCGAGAGGTCTTGGTAATCTTGTGAAACTCCGTCGTGCTGGGGATAGAGCATTGTAATTATTGCTCTTCAACGAGGAATTCCTAGTAAGCGCAAGTCATCAGCTTGCGTTGATTACGTCCCTGCCCTTTGTACACACCGCCCGTCGCTAGTACCGATTGAATGGCTTAGTGAGGCCTCAGGATCTGCTTAGAGAAGGGGGCAACTCCATCTCAGAGCGGAGAATTTGGACAAACTTGGTCATTTAGAGGAACTAAAAGTCGTAACAAGGTTTCCGTAGGTGAACCTGCGGAAGGATCATTA"
-# 
-# SCER <- "TATCGTCAAGTTGTTTTTCTAGCTAGATCGATGATCGATAGCTAGAGAGGATATATGCGCGCTATAGTA"
-# 
-# seq1 <-  rel_seq[[1]]
-# seq2 <-  rel_seq[[2]]
-# 
-# alignment <- pairwiseAlignment(seq1, seq2, type = "local")
-# print(alignment)
-# 
-# targets_of_interest <- "Glenodinium
-# Brandtodinium_nutriculum
-# Heterocapsa_rotundata
-# Azadinium_spinosum
-# Akashiwo_sanguinea
-# Protodinium
-# Gymnodinium_impudicum
-# Karenia_papiloniaceae
-# Karenia_mikimotoi
-# Karlodinium_micrum
-# Takayama_helix
-# Gyrodinium_aureolum
-# Amphidinium_carterae
-# Amphidinium_massartii
-# Margalefidinium
-# Oxyrhissis_marina
-# Prorocentrum_micans
-# Gonyaulax_spinifera
-# Pyrocystis_lunula
-# Pyrocystis_fusiformis" %>% str_split("\n") %>% unlist()
-
+print(paste("Finished in:",t1-t0))
