@@ -4,6 +4,7 @@ library(parallel)
 library(getopt)
 library(Biostrings)
 library(tidyverse)
+library(DECIPHER)
 
 
 spec = matrix(c(
@@ -20,6 +21,7 @@ spec = matrix(c(
 
 opt = getopt(spec)
 
+source("/g/schwab/Marco/repos/sabeRprobes/R/fncts.R")
 
 # opt <- tibble(
 #   file_target="/g/schwab/Marco/projects/osFISH/test2/Prorocentrum_micans_seq_all.fasta",
@@ -38,6 +40,8 @@ probe_length <- as.numeric(opt$length)+as.numeric(opt$length_range)
 rel_seq <- readDNAStringSet(opt$file_target)
 ref_seq <- readDNAStringSet(opt$file_reference)
 
+cons_seq <- make_consensus_sequence(rel_seq)
+
 temp_center <- mean(c(as.numeric(opt$temp_min), as.numeric(opt$temp_max)))
 
 
@@ -51,6 +55,43 @@ if(length(filtered_seq)==length(ref_seq)){
 } else {
   message("removed target sequence from reference file by name match")
 }
+
+char_seq <- cons_seq$base %>% paste(collapse="")
+
+all_possible_probes <- mine_probes_from_sequence(char_seq, probe_length, opt$length, opt$length_range) 
+
+
+test <- DNAStringSet(all_possible_probes%>% pull(2)) 
+
+test <- all_possible_probes %>%
+  mutate(
+    tm=get_oligo_tm(seq)
+  ) %>%
+  
+  rowwise() %>%
+  mutate(len=nchar(seq)) %>%
+  mutate(tm_old=64.9 + 41*(str_count(seq, "C|G") - 16.4) / len,
+         
+         diff_to_center=abs(tm-temp_center))
+
+get_oligo_tm <- function(dna_string){
+  
+  MeltDNA(dna_string, temps=seq(1, 100)) %>% apply(., 2, function(col){
+  
+    which.max(col)
+  
+  })
+  
+}
+
+
+#%>%
+  mutate(
+    meltDNA=
+  )
+
+
+
 
 
 all_possible_probes <- lapply(seq(1, length(rel_seq)), function(nSEQ){
@@ -79,13 +120,6 @@ all_possible_probes <- lapply(seq(1, length(rel_seq)), function(nSEQ){
   
 }) %>%
   bind_rows() %>%
-  
-
-
-
-
-
-#test <- all_possible_probes %>%
   arrange(fasta_entry, start) %>%
   group_by(seq) %>%
   summarize(
