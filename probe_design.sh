@@ -36,10 +36,11 @@ squeue -u rheinnec
 
 
 full_database="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta"
-species_file="/g/schwab/Marco/projects/osFISH/RCC_cultures_ordered_secondary.txt"
+species_file="/g/schwab/Marco/projects/osFISH/flora_species.txt"
 projdir="/g/schwab/Marco/projects/osFISH"
-outdir="/scratch/rheinnec/osFISH/test_oligoNpipe"
-
+#outdir="/scratch/rheinnec/osFISH/flora_oligoNpipe"
+outdir="/scratch/rheinnec/flora_oligo2"
+logdir="$outdir/log"
 wrkdir="/g/schwab/Marco/repos/osFISH"
 
 container="/g/schwab/Marco/container_legacy/oligoN_design.sif"
@@ -52,12 +53,12 @@ do
 echo "Processing species: $spec"
 
 sbatch \
-    -J "probe_design_$spec" \
-    -t 1:00:00 \
+    -J "$spec" \
+    -t 00:01:00 \
     --mem 2000 \
-    -e "/scratch/rheinnec/logs/log_probedesign_$spec.txt" \
-    -o "/scratch/rheinnec/logs/out_probedesign_$spec.txt" \
-    --wrap="singularity exec --bind /g/schwab --bind /scratch $container $wrkdir/process_species.sh "$full_database" "$outdir" "$spec" 0.8 0.005 "38-40""
+    -e "$logdir/log_$spec.txt" \
+    -o "$logdir/out_$spec.txt" \
+    --wrap="singularity exec --bind /g/schwab --bind /scratch $container $wrkdir/process_species.sh "$full_database" "$outdir" "$spec" 0.5 0.05 "38-40""
 
 
 
