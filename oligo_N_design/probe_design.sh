@@ -1,6 +1,64 @@
 #!/bin/bash
 
 
+## run oligo-N-design from marcos container installation
+
+## might make sense to copy these to your own drives or probably you anyway have the pr2 database yourself
+full_database="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta"
+species_file="/g/schwab/Marco/projects/osFISH/flora_species.txt"
+
+## output always on scratch... remember to copy results (they are removed after 90 days)
+outdir="/scratch/rheinnec/flora_oligo2"
+logdir="$outdir/log"
+
+## change this to the directory where the scripts are (if you clone the repo simply the path to the repo)
+wrkdir="/g/schwab/Marco/repos/osFISH/oligo_N_design"
+
+## path to the singularity container
+container="/g/schwab/Marco/container_legacy/oligoN_design.sif"
+
+mkdir $outdir
+mkdir $logdir
+
+# Loop through each species and call the processing script
+cat $species_file | while read spec
+do
+echo "Processing species: $spec"
+
+sbatch \
+    -J "$spec" \
+    -t 40:00:00 \
+    --mem 2000 \
+    -e "$logdir/log_$spec.txt" \
+    -o "$logdir/out_$spec.txt" \
+    --wrap="singularity exec --bind /g/schwab --bind /scratch $container $wrkdir/process_species.sh "$full_database" "$outdir" "$spec" 0.5 0.05 "38-40""
+
+
+
+done
+
+## change to your name to see your running jobs
+squeue -u rheinnec
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### run my r pipeline
 
 
@@ -26,47 +84,6 @@ done
 
 
 squeue -u rheinnec
-
-
-## run oligo-N-design
-
-# ## run container 
-# # singularity shell --bind /media/rheinnec/OS ~/container/test.sif
-
-
-
-full_database="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta"
-species_file="/g/schwab/Marco/projects/osFISH/flora_species.txt"
-projdir="/g/schwab/Marco/projects/osFISH"
-#outdir="/scratch/rheinnec/osFISH/flora_oligoNpipe"
-outdir="/scratch/rheinnec/flora_oligo2"
-logdir="$outdir/log"
-wrkdir="/g/schwab/Marco/repos/osFISH"
-
-container="/g/schwab/Marco/container_legacy/oligoN_design.sif"
-
-mkdir $outdir
-
-# Loop through each species and call the processing script
-cat $species_file | while read spec
-do
-echo "Processing species: $spec"
-
-sbatch \
-    -J "$spec" \
-    -t 00:01:00 \
-    --mem 2000 \
-    -e "$logdir/log_$spec.txt" \
-    -o "$logdir/out_$spec.txt" \
-    --wrap="singularity exec --bind /g/schwab --bind /scratch $container $wrkdir/process_species.sh "$full_database" "$outdir" "$spec" 0.5 0.05 "38-40""
-
-
-
-done
-
-
-squeue -u rheinnec
-
 
 
 
