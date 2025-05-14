@@ -10,11 +10,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 # Set your image directory
-image_dir = "/scratch/rheinnec/osFISH/image_analysis"
-output_dir = "/g/schwab/Marco/projects/osFISH/SF/13052025/prep"
+image_dir = "/g/schwab/Marco/projects/osFISH/SF/13052025/raw"
+output_dir = "/scratch/rheinnec/osFISH/image_analysis/test"
 #os.makedirs(output_dir, exist_ok=True)
 
-from PIL import Image, ImageDraw, ImageFont
 
 def add_scale_bar(image_rgb, pixel_size_um, bar_length_um=100, margin=50, bar_height=20):
     """
@@ -99,8 +98,20 @@ def get_channel_names(czi_path):
     channel_names = list(dict.fromkeys(channel_names))
     return channel_names
 
+
+def stitch_channels_horizontally(image_list):
+    """
+    Takes a list of RGB images (as numpy arrays) and stitches them side by side.
+    Assumes all images are the same height.
+    """
+    return np.hstack(image_list)
+
+
 # === LOAD FILES ===
 czi_files = sorted(glob(os.path.join(image_dir, "*.czi")))
+
+czi_files = czi_files[0:2]
+
 
 # === EXTRACT CHANNEL NAMES ===
 channel_names = get_channel_names(czi_files[0])
@@ -112,6 +123,7 @@ channel_max = np.zeros(num_channels)
 print("Computing global max values...")
 
 for fpath in czi_files:
+    print("extract channel max:", fpath)
     czi = CziFile(fpath)
     img, shp = czi.read_image()
     img = np.squeeze(img)  # Expected shape: (C, Z, Y, X)
@@ -134,34 +146,58 @@ channel_colors = {
 }
 
 
+rel_channels = ["DAPI", "Cy3", "Cy5"]
 
-print("Processing images...")
 for fpath in czi_files:
+
+    print("Processing images:", fpath)
+
     fname = os.path.basename(fpath).replace(".czi", "")
+    img_output_dir = os.path.join(output_dir, fname)
+    os.makedirs(img_output_dir, exist_ok=True)
     czi = CziFile(fpath)
     img, shp = czi.read_image()
     img = np.squeeze(img)  # shape: (C, Z, Y, X)
 
     z_dim = img.shape[1]
-    random_z = random.randint(0, z_dim - 1)
+    #random_z = random.randint(0, z_dim - 1)
 
-    for c in range(num_channels):
-        slice_img = img[c, random_z]
-        norm_img = (slice_img / channel_max[c]) * 255
-        norm_img = np.clip(norm_img, 0, 255).astype(np.uint8)
+    for random_z in range(z_dim):
+        print("z:", random_z)
+        stitched_images = []  # collect for stitching
 
-        # Convert to RGB using the defined color
-        channel_name = channel_names[c]
-        hex_color = channel_colors.get(channel_name, '#FFFFFF')  # fallback: white
-        colored_img = apply_color_map(norm_img, hex_color)
+        #composite = np.zeros_like(img, dtype=np.float32)  
 
-        out_path = os.path.join(output_dir, f"{fname}_z{random_z}_{channel_name}.png")
-        pixel_size_um = get_pixel_size_um(fpath)
+        for c in range(num_channels):
+            slice_img = img[c, random_z]
+            norm_img = (slice_img / channel_max[c]) * 255
+            norm_img = np.clip(norm_img, 0, 255).astype(np.uint8)
 
-        # Add scale bar (10 µm by default)
-        colored_img_with_bar = add_scale_bar(colored_img, pixel_size_um, bar_length_um=100)
+            channel_name = channel_names[c]
 
-        imsave(out_path, colored_img_with_bar)
+            if channel_name in rel_channels:
+
+                hex_color = channel_colors.get(channel_name, '#FFFFFF')  # fallback: white
+
+                # Color + scale bar
+                colored_img = apply_color_map(norm_img, hex_color)
+                pixel_size_um = get_pixel_size_um(fpath)
+                colored_img_with_bar = add_scale_bar(colored_img, pixel_size_um, bar_length_um=50)
+
+                # Save individual image
+                out_path = os.path.join(output_dir, f"{fname}_z{random_z}_{channel_name}.png")
+                #imsave(out_path, colored_img_with_bar)
+
+                # Add to stitched panel
+                stitched_images.append(colored_img_with_bar)
+            else:
+                print("channel not selected")
+
+        # === Save stitched panel ===
+        panel = stitch_channels_horizontally(stitched_images)
+        panel_path = os.path.join(img_output_dir, f"{fname}_z{random_z}_panel.png")
+        imsave(panel_path, panel)
+
 
 
 print("Done!")
