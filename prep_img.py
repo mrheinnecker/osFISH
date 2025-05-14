@@ -7,11 +7,24 @@ from skimage.io import imsave
 from glob import glob
 import random
 from PIL import Image, ImageDraw, ImageFont
+import argparse
+
+# Argument parser
+parser = argparse.ArgumentParser(description="Process .czi images and generate channel panels.")
+parser.add_argument('--image_dir', required=True, help='Directory containing input .czi files')
+parser.add_argument('--output_dir', required=True, help='Directory to save output images')
+args = parser.parse_args()
+
+# Use these in your script
+image_dir = args.image_dir
+output_dir = args.output_dir
+
+
 
 
 # Set your image directory
-image_dir = "/g/schwab/Marco/projects/osFISH/SF/13052025/raw"
-output_dir = "/scratch/rheinnec/osFISH/image_analysis/test"
+#image_dir = "/g/schwab/Marco/projects/osFISH/SF/13052025/raw"
+#output_dir = "/scratch/rheinnec/osFISH/image_analysis/test"
 #os.makedirs(output_dir, exist_ok=True)
 
 
@@ -110,7 +123,7 @@ def stitch_channels_horizontally(image_list):
 # === LOAD FILES ===
 czi_files = sorted(glob(os.path.join(image_dir, "*.czi")))
 
-czi_files = czi_files[0:2]
+#czi_files = czi_files[0:2]
 
 
 # === EXTRACT CHANNEL NAMES ===
@@ -129,7 +142,8 @@ for fpath in czi_files:
     img = np.squeeze(img)  # Expected shape: (C, Z, Y, X)
 
     for c in range(num_channels):
-        channel_max[c] = max(channel_max[c], np.max(img[c]))
+        ## arbitraty cutoff of 100 for 16 but images
+        channel_max[c] = max(channel_max[c], np.max(img[c]), 1000)
 
 print(f"Max values per channel: {channel_max}")
 
