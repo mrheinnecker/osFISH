@@ -16,7 +16,7 @@ output_dir = "/g/schwab/Marco/projects/osFISH/SF/13052025/prep"
 
 from PIL import Image, ImageDraw, ImageFont
 
-def add_scale_bar(image_rgb, pixel_size_um, bar_length_um=100):
+def add_scale_bar(image_rgb, pixel_size_um, bar_length_um=100, margin=50, bar_height=20):
     """
     Draws a white scale bar of `bar_length_um` in bottom-right of image_rgb.
     """
@@ -27,8 +27,8 @@ def add_scale_bar(image_rgb, pixel_size_um, bar_length_um=100):
     draw = ImageDraw.Draw(pil_img)
 
     # Bar position and size
-    margin = 10
-    bar_height = 5
+    #margin = 10
+    #bar_height = 20
     x1 = w - bar_length_px - margin
     y1 = h - margin - bar_height
     x2 = w - margin
@@ -49,7 +49,7 @@ def add_scale_bar(image_rgb, pixel_size_um, bar_length_um=100):
     text_width, text_height = bbox[2] - bbox[0], bbox[3] - bbox[1]
 
     text_x = x1 + (bar_length_px - text_width) // 2
-    text_y = y1 - text_height - 2
+    text_y = y1 - text_height - 20
 
     draw.text((text_x, text_y), label, fill=(255, 255, 255), font=font)
     return np.array(pil_img)
