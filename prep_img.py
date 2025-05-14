@@ -140,8 +140,8 @@ channel_colors = {
     'DAPI': '#0000FF',        # Blue
     'EGFP': '#00FF00',        # Green
     'Cy3': '#FF9900',         # Orange
-    'Cy5': '#FF00FF',         # Magenta
-    'At590': '#FF0000',       # Red
+    'At590': '#FF00FF',         # Magenta
+    'Cy5': '#FF0000',       # Red
     'Bright': '#CCCCCC',      # Gray
 }
 
@@ -166,7 +166,15 @@ for fpath in czi_files:
         print("z:", random_z)
         stitched_images = []  # collect for stitching
 
-        #composite = np.zeros_like(img, dtype=np.float32)  
+
+        ## prepare emtpy image for composite:
+        dummy_slice_img = img[0, 0]
+        dummy_norm_img = (dummy_slice_img / channel_max[c]) * 255
+        dummy_norm_img = np.clip(dummy_norm_img, 0, 255).astype(np.uint8)
+        dummy_color = '#FFFFFF' 
+        dummy_colored_img = apply_color_map(dummy_norm_img, dummy_color)
+
+        composite = np.zeros_like(dummy_colored_img, dtype=np.float32)  
 
         for c in range(num_channels):
             slice_img = img[c, random_z]
@@ -190,8 +198,16 @@ for fpath in czi_files:
 
                 # Add to stitched panel
                 stitched_images.append(colored_img_with_bar)
+
+                composite += colored_img.astype(np.float32) / 255.0
             else:
                 print("channel not selected")
+
+        composite = np.clip(composite, 0, 1)
+        composite = (composite * 255).astype(np.uint8)
+        composite_with_bar = add_scale_bar(composite, pixel_size_um, bar_length_um=10)
+
+        stitched_images.append(composite_with_bar)
 
         # === Save stitched panel ===
         panel = stitch_channels_horizontally(stitched_images)
