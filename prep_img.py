@@ -13,12 +13,13 @@ import argparse
 parser = argparse.ArgumentParser(description="Process .czi images and generate channel panels.")
 parser.add_argument('--image_dir', required=True, help='Directory containing input .czi files')
 parser.add_argument('--output_dir', required=True, help='Directory to save output images')
+parser.add_argument('--channels', required=True, help='Channels to use for this image set')
 args = parser.parse_args()
 
 # Use these in your script
 image_dir = args.image_dir
 output_dir = args.output_dir
-
+channels_oi = args.channels
 
 
 
@@ -127,8 +128,10 @@ czi_files = sorted(glob(os.path.join(image_dir, "*.czi")))
 
 
 # === EXTRACT CHANNEL NAMES ===
-channel_names = get_channel_names(czi_files[0])
+channel_names= get_channel_names(czi_files[0])
 num_channels = len(channel_names)
+
+
 print(f"Detected channels: {channel_names}")
 
 # === PASS 1: Compute global max per channel ===
@@ -160,7 +163,15 @@ channel_colors = {
 }
 
 
-rel_channels = ["DAPI", "Cy3", "Cy5"]
+#rel_channels = ["DAPI", "Cy3", "Cy5"]
+
+rel_channels = [ch.strip() for ch in channels_oi.split(",")]
+
+channel_names_raw=channel_names
+sorted_channel_names=sorted(channel_names_raw, key=lambda x: (x != "Bright", x))
+sorted_num_channels = [channel_names_raw.index(name) for name in sorted_channel_names]
+
+
 
 for fpath in czi_files:
 
@@ -190,15 +201,15 @@ for fpath in czi_files:
 
         composite = np.zeros_like(dummy_colored_img, dtype=np.float32)  
 
-        for c in range(num_channels):
+        for c in sorted_num_channels:
             slice_img = img[c, random_z]
             norm_img = (slice_img / channel_max[c]) * 255
             norm_img = np.clip(norm_img, 0, 255).astype(np.uint8)
 
             channel_name = channel_names[c]
-
+            print(channel_name)
             if channel_name in rel_channels:
-
+                
                 hex_color = channel_colors.get(channel_name, '#FFFFFF')  # fallback: white
 
                 # Color + scale bar
@@ -212,14 +223,14 @@ for fpath in czi_files:
 
                 # Add to stitched panel
                 stitched_images.append(colored_img_with_bar)
-
-                composite += colored_img.astype(np.float32) / 255.0
+                if channel_name != "Bright":
+                    composite += colored_img.astype(np.float32) / 255.0
             else:
                 print("channel not selected")
 
         composite = np.clip(composite, 0, 1)
         composite = (composite * 255).astype(np.uint8)
-        composite_with_bar = add_scale_bar(composite, pixel_size_um, bar_length_um=10)
+        composite_with_bar = add_scale_bar(composite, pixel_size_um, bar_length_um=50)
 
         stitched_images.append(composite_with_bar)
 
@@ -233,6 +244,7 @@ for fpath in czi_files:
 print("Done!")
 
 
+#channel_names=sorted(channel_names_raw, key=lambda x: (x != "Bright", x))
 
 
 
