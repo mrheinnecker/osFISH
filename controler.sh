@@ -5,7 +5,7 @@ container="/g/schwab/rheinnec/container_legacy/python_latest.sif"
 logdir="/scratch/rheinnec/logs"
 
 
-sf_run="SF02"
+sf_run="SF02_test02"
 
 
 main_out_dir="/scratch/rheinnec/osFISH/$sf_run"
@@ -14,28 +14,25 @@ raw_img_dir="/g/schwab/Marco/projects/osFISH/SF/13052025/raw"
 
 
 
-raw_string="M:02,05,08;mix:01;HR:03,06,09;Kmiki:04,07,10"
+run_template="/g/schwab/Marco/projects/osFISH/image_run_templates/SF02.tsv"
 
 
+mkdir $main_out_dir
 
-IFS=';' read -ra pair_array <<< "$raw_string"
+cat "$run_template" | while IFS=$'\t' read -r prefix numbers channels species
+do
 
-
-for same_species in "${pair_array[@]}"; do
-
-    echo $same_species
-
-    prefix="${same_species%%:*}"
-    numbers="${same_species#*:}"
+    echo $prefix
+    image_dir="${raw_img_dir}/$prefix"
     IFS=',' read -ra species_array <<< "$numbers"
 
     # Create the target directory
     mkdir -p "${raw_img_dir}/$prefix"
 
     # Loop over each species number
-    for num in "${species_array[@]}"; do
+    for num_raw in "${species_array[@]}"; do
 
-        echo $num
+        num=$(printf "%02d" "$num_raw")
 
         # Find matching files
         pattern="${sf_run}_${num}*"
@@ -49,39 +46,31 @@ for same_species in "${pair_array[@]}"; do
             filename=$(basename "$filepath")
             
             # Create symbolic link in the prefix directory
-            ln -s "$filepath" "${raw_img_dir}/$prefix/$filename"
+            ln -s "$filepath" "${image_dir}/$filename"
         done
     done
-done
+
+    
+    out_dir=$main_out_dir/$prefix
+    mkdir $out_dir
+
+    echo $channels
 
 
+    singularity exec --bind /g/schwab --bind /scratch $container python3 $wrkdir/prep_img.py --image_dir $image_dir --output_dir $out_dir --channels "$channels"
 
+    # sbatch \
+    #     -J "osFISH_$prefix" \
+    #     -t 0:30:00 \
+    #     --mem 16000 \
+    #     -e "$logdir/log_osFISH_$prefix.txt" \
+    #     -o "$logdir/out_osFISH_$prefix.txt" \
+    #     --wrap="singularity exec --bind /g/schwab --bind /scratch $container python3 $wrkdir/prep_img.py --image_dir $image_dir --output_dir $out_dir --channels $channels"
 
-
-mkdir $main_out_dir
-
-ls $raw_img_dir -F | grep '/$' | while read subdir
-do
-
-input_dir=$raw_img_dir/$subdir
-
-echo $input_dir
-
-out_dir=$main_out_dir/$subdir
-mkdir $out_dir
-
-echo $out_dir
-
-sbatch \
-    -J "osFISH_$subdir" \
-    -t 1:00:00 \
-    --mem 32000 \
-    -e "$logdir/log_osFISH_$subdir.txt" \
-    -o "$logdir/out_osFISH_$subdir.txt" \
-    --wrap="singularity exec --bind /g/schwab --bind /scratch $container python3 $wrkdir/prep_img.py --image_dir $input_dir --output_dir $out_dir"
 
 
 done
+
 
 
 
