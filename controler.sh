@@ -5,7 +5,7 @@ container="/g/schwab/rheinnec/container_legacy/python_latest.sif"
 logdir="/scratch/rheinnec/logs"
 
 
-sf_run="SF02_test02"
+sf_run="SF02"
 
 
 main_out_dir="/scratch/rheinnec/osFISH/$sf_run"
@@ -54,18 +54,18 @@ do
     out_dir=$main_out_dir/$prefix
     mkdir $out_dir
 
-    echo $channels
+    echo "submitting clusterjob"
 
 
-    singularity exec --bind /g/schwab --bind /scratch $container python3 $wrkdir/prep_img.py --image_dir $image_dir --output_dir $out_dir --channels "$channels"
+   # singularity exec --bind /g/schwab --bind /scratch $container python3 $wrkdir/prep_img.py --image_dir $image_dir --output_dir $out_dir --channels '$channels'
 
-    # sbatch \
-    #     -J "osFISH_$prefix" \
-    #     -t 0:30:00 \
-    #     --mem 16000 \
-    #     -e "$logdir/log_osFISH_$prefix.txt" \
-    #     -o "$logdir/out_osFISH_$prefix.txt" \
-    #     --wrap="singularity exec --bind /g/schwab --bind /scratch $container python3 $wrkdir/prep_img.py --image_dir $image_dir --output_dir $out_dir --channels $channels"
+    sbatch \
+        -J "osFISH_$prefix" \
+        -t 1:00:00 \
+        --mem 16000 \
+        -e "$logdir/log_osFISH_$prefix.txt" \
+        -o "$logdir/out_osFISH_$prefix.txt" \
+        --wrap="singularity exec --bind /g/schwab --bind /scratch $container python3 $wrkdir/prep_img.py --image_dir $image_dir --output_dir $out_dir --channels '$channels'"
 
 
 
