@@ -5,7 +5,7 @@ container="/g/schwab/rheinnec/container_legacy/python_latest.sif"
 logdir="/scratch/rheinnec/logs"
 
 
-sf_run="SF02"
+sf_run="SF02_quant_man3"
 
 
 main_out_dir="/scratch/rheinnec/osFISH/$sf_run"
@@ -19,9 +19,10 @@ run_template="/g/schwab/Marco/projects/osFISH/image_run_templates/SF02.tsv"
 
 mkdir $main_out_dir
 
-cat "$run_template" | while IFS=$'\t' read -r prefix numbers channels species
+tail -n +2  "$run_template" | while IFS=$'\t' read -r prefix numbers channels species bf_scaling dapi_scaling
 do
-
+# echo $channels
+# done
     echo $prefix
     image_dir="${raw_img_dir}/$prefix"
     IFS=',' read -ra species_array <<< "$numbers"
@@ -57,15 +58,15 @@ do
     echo "submitting clusterjob"
 
 
-   # singularity exec --bind /g/schwab --bind /scratch $container python3 $wrkdir/prep_img.py --image_dir $image_dir --output_dir $out_dir --channels '$channels'
+    #singularity exec --bind /g/schwab --bind /scratch $container python3 $wrkdir/prep_img.py --image_dir $image_dir --output_dir $out_dir --channels "${channels}" --dapi_scaling $dapi_scaling --bf_scaling $bf_scaling
 
     sbatch \
         -J "osFISH_$prefix" \
-        -t 1:00:00 \
-        --mem 16000 \
+        -t 0:30:00 \
+        --mem 32000 \
         -e "$logdir/log_osFISH_$prefix.txt" \
         -o "$logdir/out_osFISH_$prefix.txt" \
-        --wrap="singularity exec --bind /g/schwab --bind /scratch $container python3 $wrkdir/prep_img.py --image_dir $image_dir --output_dir $out_dir --channels '$channels'"
+        --wrap="singularity exec --bind /g/schwab --bind /scratch $container python3 $wrkdir/prep_img.py --image_dir $image_dir --output_dir $out_dir --channels '$channels' --dapi_scaling '$dapi_scaling' --bf_scaling '$bf_scaling'"
 
 
 

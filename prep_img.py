@@ -14,14 +14,18 @@ parser = argparse.ArgumentParser(description="Process .czi images and generate c
 parser.add_argument('--image_dir', required=True, help='Directory containing input .czi files')
 parser.add_argument('--output_dir', required=True, help='Directory to save output images')
 parser.add_argument('--channels', required=True, help='Channels to use for this image set')
+parser.add_argument('--bf_scaling', required=True, help='quantile to use for brightfiled channel scaling')
+parser.add_argument('--dapi_scaling', required=True, help='quantile to use for DAPI channel scaling')
 args = parser.parse_args()
 
 # Use these in your script
 image_dir = args.image_dir
 output_dir = args.output_dir
 channels_oi = args.channels
+bf_scaling = args.bf_scaling
+dapi_scaling = args.dapi_scaling
 
-
+print("selected channels: ",channels_oi)
 
 # Set your image directory
 #image_dir = "/g/schwab/Marco/projects/osFISH/SF/13052025/raw"
@@ -136,6 +140,12 @@ print(f"Detected channels: {channel_names}")
 
 # === PASS 1: Compute global max per channel ===
 channel_max = np.zeros(num_channels)
+
+## switched to percentiles
+# Collect all pixel values for each channel
+
+
+
 print("Computing global max values...")
 
 for fpath in czi_files:
@@ -144,11 +154,35 @@ for fpath in czi_files:
     img, shp = czi.read_image()
     img = np.squeeze(img)  # Expected shape: (C, Z, Y, X)
 
-    for c in range(num_channels):
-        ## arbitraty cutoff of 100 for 16 but images
-        channel_max[c] = max(channel_max[c], np.max(img[c]), 1000)
+    channel_values = [[] for _ in range(num_channels)]
 
-print(f"Max values per channel: {channel_max}")
+
+
+    channel_scale = []
+    for c in range(num_channels):
+        # In your loop over czi_files and each image:
+        channel_max[c] = max(channel_max[c], np.max(img[c]), 1000)
+        channel_values[c].extend(img[c].flatten())  # c is channel index
+        if channel_names[c] == "Bright":
+            if float(bf_scaling)==100:
+                scale_value = channel_max[c]
+            else:
+                scale_value = np.percentile(channel_values[c], float(bf_scaling))  # or 99.0 or 99.9
+        elif channel_names[c] == "DAPI":
+            if float(dapi_scaling)==100:
+                scale_value = channel_max[c]
+            else:
+                scale_value = np.percentile(channel_values[c], float(dapi_scaling))  # or 99.0 or 99.9
+        else:
+            scale_value = channel_max[c]
+
+        channel_scale.append(scale_value)
+
+    # for c in range(num_channels):
+    #     ## arbitraty cutoff of 100 for 16 but images
+    #     channel_max[c] = max(channel_max[c], np.max(img[c]), 1000)
+
+print(f"Max values per channel: {channel_scale}")
 
 # === PASS 2: Process each image and save random Z slice per channel ===
 
@@ -194,7 +228,7 @@ for fpath in czi_files:
 
         ## prepare emtpy image for composite:
         dummy_slice_img = img[0, 0]
-        dummy_norm_img = (dummy_slice_img / channel_max[c]) * 255
+        dummy_norm_img = (dummy_slice_img / channel_scale[c]) * 255
         dummy_norm_img = np.clip(dummy_norm_img, 0, 255).astype(np.uint8)
         dummy_color = '#FFFFFF' 
         dummy_colored_img = apply_color_map(dummy_norm_img, dummy_color)
@@ -203,7 +237,7 @@ for fpath in czi_files:
 
         for c in sorted_num_channels:
             slice_img = img[c, random_z]
-            norm_img = (slice_img / channel_max[c]) * 255
+            norm_img = (slice_img / channel_scale[c]) * 255
             norm_img = np.clip(norm_img, 0, 255).astype(np.uint8)
 
             channel_name = channel_names[c]
