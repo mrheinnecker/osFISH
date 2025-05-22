@@ -24,7 +24,8 @@ output_dir = args.output_dir
 channels_oi = args.channels
 bf_scaling = args.bf_scaling
 dapi_scaling = args.dapi_scaling
-
+print("image dir:", image_dir)
+print("output_dir:", output_dir)
 print("selected channels: ",channels_oi)
 
 # Set your image directory
@@ -68,7 +69,7 @@ def add_scale_bar(image_rgb, pixel_size_um, bar_length_um=100, margin=50, bar_he
     text_x = x1 + (bar_length_px - text_width) // 2
     text_y = y1 - text_height - 20
 
-    draw.text((text_x, text_y), label, fill=(255, 255, 255), font=font)
+    #draw.text((text_x, text_y), label, fill=(255, 255, 255), font=font)
     return np.array(pil_img)
 
 
@@ -219,9 +220,19 @@ for fpath in czi_files:
     img = np.squeeze(img)  # shape: (C, Z, Y, X)
 
     z_dim = img.shape[1]
+
+    slices = 5  # total number of slices, ideally odd for symmetric selection
+
+    mid = z_dim // 2
+    half = slices // 2
+    start = max(mid - half, 0)
+    end = min(mid + half + 1, z_dim)  # +1 because `range` is exclusive at the end
+
+    for random_z in range(start, end):
+
     #random_z = random.randint(0, z_dim - 1)
 
-    for random_z in range(z_dim):
+    #for random_z in range(z_dim):
         print("z:", random_z)
         stitched_images = []  # collect for stitching
 
@@ -241,9 +252,9 @@ for fpath in czi_files:
             norm_img = np.clip(norm_img, 0, 255).astype(np.uint8)
 
             channel_name = channel_names[c]
-            print(channel_name)
+            
             if channel_name in rel_channels:
-                
+                print(channel_name, "scaled by:", channel_scale[c])
                 hex_color = channel_colors.get(channel_name, '#FFFFFF')  # fallback: white
 
                 # Color + scale bar
@@ -260,7 +271,7 @@ for fpath in czi_files:
                 if channel_name != "Bright":
                     composite += colored_img.astype(np.float32) / 255.0
             else:
-                print("channel not selected")
+                print(channel_name, "channel not selected")
 
         composite = np.clip(composite, 0, 1)
         composite = (composite * 255).astype(np.uint8)
