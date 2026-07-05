@@ -21,16 +21,16 @@ spec = matrix(c(
 
 opt = getopt(spec)
 
-source("/g/schwab/Marco/repos/sabeRprobes/R/fncts.R")
+source("/g/schwab/marco/repos/sabeRprobes/R/fncts.R")
 
-# opt <- tibble(
-#   file_target="/g/schwab/Marco/projects/osFISH/test2/Prorocentrum_micans_seq_all.fasta",
-#   file_reference="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta",
-#   temp_min=55,
-#   temp_max=75,
-#   length=40,
-#   length_range=3
-# )
+opt <- tibble(
+  file_target="/g/schwab/marco/projects/osFISH/test2/Prorocentrum_micans_seq_all.fasta",
+  file_reference="/g/schwab/marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta",
+  temp_min=55,
+  temp_max=75,
+  length=40,
+  length_range=3
+)
 
 t0 <- Sys.time()
 
@@ -86,9 +86,9 @@ get_oligo_tm <- function(dna_string){
 
 
 #%>%
-  mutate(
-    meltDNA=
-  )
+  # mutate(
+  #   meltDNA=
+  # )
 
 
 

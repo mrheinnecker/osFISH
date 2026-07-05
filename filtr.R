@@ -18,14 +18,14 @@ opt = getopt(spec)
 opt <- tibble(
   target="/g/schwab/Marco/projects/osFISH/RCC_cultures_ordered.txt",
   file_reference="/g/schwab/Marco/projects/osFISH/pr2_version_5.0.0_SSU_taxo_long.fasta",
-  outdir="/g/schwab/Marco/projects/osFISH/test/", 
+  outdir="/g/schwab/Marco/projects/osFISH/test3/", 
   store_separate=F
   # temp_max=75, 
   # length=40,
   # length_range=3
 )
 
-
+dir.create(opt$outdir)
 extract_by_str_match <- function(ref_seq, target, exact_name=FALSE){
   
   ooi <-  tolower(target)
