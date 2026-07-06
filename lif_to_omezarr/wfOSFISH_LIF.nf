@@ -90,9 +90,23 @@ process CONVERTOSFISHLIFTOOMEZARR {
     rm -rf "${dataset_name}.ome.zarr"
 
     extra_args=()
-    if [ -n "${params.eubi_extra_args}" ]; then
-      read -r -a extra_args <<< "${params.eubi_extra_args}"
+    eubi_extra_args="${params.eubi_extra_args}"
+    case "\${eubi_extra_args}" in
+      ""|TRUE|true|FALSE|false|0|1|yes|YES|no|NO)
+        eubi_extra_args=""
+        ;;
+    esac
+    if [ -n "\${eubi_extra_args}" ]; then
+      if [[ "\${eubi_extra_args}" != --* ]]; then
+        echo "Ignoring eubi_extra_args because it does not look like CLI flags: \${eubi_extra_args}" >&2
+      else
+        read -r -a extra_args <<< "\${eubi_extra_args}"
+      fi
     fi
+
+    echo "Input LIF: ${input_lif}"
+    echo "Output OME-Zarr: ${dataset_name}.ome.zarr"
+    echo "Extra EuBI args: \${extra_args[*]:-<none>}"
 
     eubi to_zarr \
       "${input_lif}" \
