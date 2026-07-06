@@ -8,10 +8,11 @@ Pipeline:
 ```text
 single .lif
   -> extract LIF metadata and channel names
-  -> eubi to_zarr
-  -> patch OME-Zarr omero/channel metadata
+  -> export each LIF scene to an intermediate OME-TIFF
+  -> eubi to_zarr for each scene
+  -> patch OME-Zarr omero/channel metadata for each scene
   -> optional S3 upload
-  -> one-dataset MoBIE collection table
+  -> MoBIE collection table with LIF scenes arranged on a grid
 ```
 
 ## Run
@@ -49,7 +50,7 @@ If LIF metadata is missing physical scales, pass fallbacks:
 The converted data are published to:
 
 ```text
-<main_dir>/processed/<dataset_name>.ome.zarr
+<main_dir>/processed/<dataset_name>_<scene_index>_<scene_name>.ome.zarr
 ```
 
 The MoBIE collection table is written to the workflow log directory as:

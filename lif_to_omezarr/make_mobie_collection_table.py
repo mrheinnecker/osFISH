@@ -80,6 +80,29 @@ def metadata_channels(metadata):
     return rows
 
 
+def near_square_columns(n):
+    if n <= 1:
+        return 1
+    columns = 1
+    while columns * columns < n:
+        columns += 1
+    return columns
+
+
+def load_metadata_rows(path):
+    metadata_path = Path(path)
+    if metadata_path.is_dir():
+        files = sorted(metadata_path.glob("*_metadata.json"))
+    else:
+        files = [metadata_path]
+    rows = []
+    for fallback_index, file_path in enumerate(files):
+        metadata = json.loads(file_path.read_text(encoding="utf-8"))
+        metadata.setdefault("grid_index", fallback_index)
+        rows.append(metadata)
+    return rows
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Create a one-dataset MoBIE collection table from extracted LIF metadata."
@@ -90,9 +113,8 @@ def main():
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
-    metadata = json.loads(Path(args.metadata_json).read_text(encoding="utf-8"))
-    dataset_name = args.dataset_name
-    uri = f"{public_s3_prefix(args.s3_bucket)}/{dataset_name}.ome.zarr/"
+    metadata_rows = load_metadata_rows(args.metadata_json)
+    grid_columns = near_square_columns(len(metadata_rows))
 
     fieldnames = [
         "uri",
@@ -116,27 +138,32 @@ def main():
     with Path(args.output).open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter="\t")
         writer.writeheader()
-        for channel in metadata_channels(metadata):
-            writer.writerow(
-                {
-                    "uri": uri,
-                    "name": f"{dataset_name}_c{channel['index']}_{channel['display']}",
-                    "view": "osFISH",
-                    "grid": "osFISH",
-                    "grid_position": "(0,0)",
-                    "channel": channel["index"],
-                    "display": channel["display"],
-                    "color": channel["color"],
-                    "excitation_wavelength_nm": channel["excitation_wavelength_nm"],
-                    "emission_wavelength_nm": channel["emission_wavelength_nm"],
-                    "emission_begin_nm": channel["emission_begin_nm"],
-                    "emission_end_nm": channel["emission_end_nm"],
-                    "contrast_limits": channel["contrast_limits"],
-                    "blend": "sum",
-                    "format": "OmeZarr",
-                    "exclusive": "TRUE",
-                }
-            )
+        for metadata in metadata_rows:
+            dataset_name = metadata.get("name") or args.dataset_name
+            grid_index = int(metadata.get("grid_index", 0))
+            grid_position = f"({grid_index % grid_columns},{grid_index // grid_columns})"
+            uri = f"{public_s3_prefix(args.s3_bucket)}/{dataset_name}.ome.zarr/"
+            for channel in metadata_channels(metadata):
+                writer.writerow(
+                    {
+                        "uri": uri,
+                        "name": f"{dataset_name}_c{channel['index']}_{channel['display']}",
+                        "view": "osFISH",
+                        "grid": "osFISH",
+                        "grid_position": grid_position,
+                        "channel": channel["index"],
+                        "display": channel["display"],
+                        "color": channel["color"],
+                        "excitation_wavelength_nm": channel["excitation_wavelength_nm"],
+                        "emission_wavelength_nm": channel["emission_wavelength_nm"],
+                        "emission_begin_nm": channel["emission_begin_nm"],
+                        "emission_end_nm": channel["emission_end_nm"],
+                        "contrast_limits": channel["contrast_limits"],
+                        "blend": "sum",
+                        "format": "OmeZarr",
+                        "exclusive": "TRUE",
+                    }
+                )
 
 
 if __name__ == "__main__":

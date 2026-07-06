@@ -58,7 +58,7 @@ process EXTRACTOSFISHLIFMETADATA {
 }
 
 
-process CONVERTOSFISHLIFTOOMEZARR {
+process CONVERTOSFISHLIFSCENESTOOMEZARR {
 
     cpus 1
     memory "32GB"
@@ -71,7 +71,7 @@ process CONVERTOSFISHLIFTOOMEZARR {
     tuple val(dataset_name), val(input_lif), path(metadata_json), path(pixel_size_tsv)
 
     output:
-    tuple val(dataset_name), path("${dataset_name}.ome.zarr"), path(metadata_json), emit: omezarr
+    tuple val(dataset_name), path("*.ome.zarr"), path("scene_metadata"), emit: omezarr
     path "${dataset_name}_conversion_done.txt"
 
     script:
@@ -87,7 +87,15 @@ process CONVERTOSFISHLIFTOOMEZARR {
       exit 1
     fi
 
-    rm -rf "${dataset_name}.ome.zarr"
+    rm -rf *.ome.zarr scene_inputs scene_metadata scenes_to_convert.tsv
+
+    python3 "${params.script_dir}/export_lif_scenes.py" \
+      --input "${input_lif}" \
+      --base-name "${dataset_name}" \
+      --metadata-json "${metadata_json}" \
+      --scene-dir "scene_inputs" \
+      --scene-metadata-dir "scene_metadata" \
+      --scene-table "scenes_to_convert.tsv"
 
     extra_args=()
     eubi_extra_args="${params.eubi_extra_args}"
@@ -105,56 +113,38 @@ process CONVERTOSFISHLIFTOOMEZARR {
     fi
 
     echo "Input LIF: ${input_lif}"
-    echo "Output OME-Zarr: ${dataset_name}.ome.zarr"
+    echo "Scene table:"
+    cat scenes_to_convert.tsv
     echo "Extra EuBI args: \${extra_args[*]:-<none>}"
 
-    eubi to_zarr \
-      "${input_lif}" \
-      "${dataset_name}.ome.zarr" \
-      --x_unit nm \
-      --y_unit nm \
-      --z_unit nm \
-      --x_scale "\${pixel_scale_x}" \
-      --y_scale "\${pixel_scale_y}" \
-      --z_scale "\${pixel_scale_z}" \
-      --dimension_order xyzct \
-      --squeeze True \
-      --save_omexml True \
-      --zar_format "${params.zarr_format}" \
-      --auto_chunk True \
-      --jvm_memory 8GB \
-      --max_workers 1 \
-      "\${extra_args[@]}"
+    tail -n +2 scenes_to_convert.tsv | while IFS=\$'\t' read -r scene_dataset scene_index scene_name scene_ome_tiff scene_metadata; do
+      echo "Converting scene \${scene_index}: \${scene_name} -> \${scene_dataset}.ome.zarr"
+
+      eubi to_zarr \
+        "\${scene_ome_tiff}" \
+        "\${scene_dataset}.ome.zarr" \
+        --x_unit nm \
+        --y_unit nm \
+        --z_unit nm \
+        --x_scale "\${pixel_scale_x}" \
+        --y_scale "\${pixel_scale_y}" \
+        --z_scale "\${pixel_scale_z}" \
+        --dimension_order xyzct \
+        --squeeze True \
+        --save_omexml True \
+        --zar_format "${params.zarr_format}" \
+        --auto_chunk True \
+        --jvm_memory 8GB \
+        --max_workers 1 \
+        "\${extra_args[@]}"
+
+      python3 "${params.script_dir}/patch_omezarr_metadata.py" \
+        --omezarr "\${scene_dataset}.ome.zarr" \
+        --metadata-json "\${scene_metadata}" \
+        --log "\${scene_dataset}_omezarr_metadata.tsv"
+    done
 
     touch "${dataset_name}_conversion_done.txt"
-    """
-}
-
-
-process PATCHOSFISHOMEZARRMETADATA {
-
-    cpus 1
-    memory "1GB"
-    time "10m"
-
-    publishDir "${params.logdir}/omezarr_metadata", mode:"copy", pattern:"*_omezarr_metadata.tsv"
-    containerOptions "--bind /g --bind /scratch --bind /home"
-
-    input:
-    tuple val(dataset_name), path(omezarr), path(metadata_json)
-
-    output:
-    tuple val(dataset_name), path(omezarr), path(metadata_json), emit: patched_omezarr
-    path "${dataset_name}_omezarr_metadata.tsv"
-
-    script:
-    """
-    set -euo pipefail
-
-    python3 "${params.script_dir}/patch_omezarr_metadata.py" \
-      --omezarr "${omezarr}" \
-      --metadata-json "${metadata_json}" \
-      --log "${dataset_name}_omezarr_metadata.tsv"
     """
 }
 
@@ -169,31 +159,26 @@ process UPLOADOSFISHOMEZARR {
     containerOptions "--bind /g --bind /scratch --bind /home"
 
     input:
-    tuple val(dataset_name), path(omezarr), path(metadata_json)
+    tuple val(dataset_name), path(omezarr), path(metadata_dir)
 
     output:
-    tuple val(dataset_name), path(metadata_json), path("${dataset_name}_s3_upload_done.txt"), emit: uploaded
+    tuple val(dataset_name), path("scene_metadata"), path("${dataset_name}_s3_upload_done.txt"), emit: uploaded
 
     script:
     """
     set -euo pipefail
 
-    image_zarr="${omezarr}"
-    if [ ! -e "\${image_zarr}/.zattrs" ] && [ ! -e "\${image_zarr}/.zgroup" ]; then
-      for candidate in "\${image_zarr}"/*.zarr "\${image_zarr}"/*.ome.zarr "\${image_zarr}"/*/*.zarr "\${image_zarr}"/*/*.ome.zarr; do
-        if [ -d "\$candidate" ]; then
-          image_zarr="\$candidate"
-          break
-        fi
-      done
-    fi
-
-    if [ ! -e "\${image_zarr}/.zattrs" ] && [ ! -e "\${image_zarr}/.zgroup" ]; then
-      echo "Could not find an OME-Zarr root marker under ${omezarr}" >&2
-      exit 1
-    fi
-
-    mc cp "\${image_zarr}/" "${params.s3_bucket}/${dataset_name}.ome.zarr/" --recursive
+    for image_zarr in *.ome.zarr; do
+      if [ ! -d "\${image_zarr}" ]; then
+        continue
+      fi
+      if [ ! -e "\${image_zarr}/.zattrs" ] && [ ! -e "\${image_zarr}/.zgroup" ]; then
+        echo "Could not find an OME-Zarr root marker in \${image_zarr}" >&2
+        exit 1
+      fi
+      scene_dataset="\${image_zarr%.ome.zarr}"
+      mc cp "\${image_zarr}/" "${params.s3_bucket}/\${scene_dataset}.ome.zarr/" --recursive
+    done
     touch "${dataset_name}_s3_upload_done.txt"
     """
 }
@@ -209,7 +194,7 @@ process MAKEOSFISHMOBIETABLE {
     containerOptions "--bind /g --bind /scratch --bind /home"
 
     input:
-    tuple val(dataset_name), path(metadata_json)
+    tuple val(dataset_name), path(metadata_dir)
 
     output:
     path "mobie_collection_table.tsv"
@@ -219,7 +204,7 @@ process MAKEOSFISHMOBIETABLE {
     set -euo pipefail
 
     python3 "${params.script_dir}/make_mobie_collection_table.py" \
-      --metadata-json "${metadata_json}" \
+      --metadata-json "${metadata_dir}" \
       --dataset-name "${dataset_name}" \
       --s3-bucket "${params.s3_bucket}" \
       --output "mobie_collection_table.tsv"
@@ -264,16 +249,15 @@ workflow {
     input_ch = Channel.value(tuple(dataset_name, params.input_lif))
 
     EXTRACTOSFISHLIFMETADATA(input_ch)
-    CONVERTOSFISHLIFTOOMEZARR(EXTRACTOSFISHLIFMETADATA.out.metadata)
-    PATCHOSFISHOMEZARRMETADATA(CONVERTOSFISHLIFTOOMEZARR.out.omezarr)
+    CONVERTOSFISHLIFSCENESTOOMEZARR(EXTRACTOSFISHLIFMETADATA.out.metadata)
 
     upload_enabled = params.upload.toString().toLowerCase() in ["true", "1", "yes"]
     if (upload_enabled) {
-        UPLOADOSFISHOMEZARR(PATCHOSFISHOMEZARRMETADATA.out.patched_omezarr)
-        table_input = UPLOADOSFISHOMEZARR.out.uploaded.map { name, metadata_json, done -> tuple(name, metadata_json) }
+        UPLOADOSFISHOMEZARR(CONVERTOSFISHLIFSCENESTOOMEZARR.out.omezarr)
+        table_input = UPLOADOSFISHOMEZARR.out.uploaded.map { name, metadata_dir, done -> tuple(name, metadata_dir) }
         MAKEOSFISHMOBIETABLE(table_input)
     } else {
-        table_input = PATCHOSFISHOMEZARRMETADATA.out.patched_omezarr.map { name, omezarr, metadata_json -> tuple(name, metadata_json) }
+        table_input = CONVERTOSFISHLIFSCENESTOOMEZARR.out.omezarr.map { name, omezarr, metadata_dir -> tuple(name, metadata_dir) }
         MAKEOSFISHMOBIETABLE(table_input)
     }
 
