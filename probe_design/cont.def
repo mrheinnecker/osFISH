@@ -1,0 +1,32 @@
+Bootstrap: docker
+From: rocker/r-ver:4.3.2
+
+%labels
+    Author Marco
+    Description R with Bioconductor packages DECIPHER and ShortRead
+
+%environment
+    export LC_ALL=C
+    export LANG=C
+    export R_LIBS_SITE=/usr/local/lib/R/site-library
+
+%post
+    apt-get update && apt-get install -y \
+        libxml2-dev \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        zlib1g-dev \
+        libbz2-dev \
+        liblzma-dev \
+        libpcre2-dev \
+        libxt-dev \
+        && apt-get clean
+
+    # Install BiocManager
+    R -e "install.packages('BiocManager', repos='https://cloud.r-project.org')"
+
+    # Install Bioconductor packages
+    R -e "BiocManager::install(c('DECIPHER','ShortRead'), ask=FALSE, update=FALSE)"
+
+%runscript
+    exec R "$@"
