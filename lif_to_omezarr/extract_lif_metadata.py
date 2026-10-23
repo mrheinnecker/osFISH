@@ -20,7 +20,13 @@ except ImportError:
     CziFile = None
 
 
+METER_TO_NM_FACTOR = 1_000_000_000.0
 UNIT_TO_NM = {
+    "m": METER_TO_NM_FACTOR,
+    "meter": METER_TO_NM_FACTOR,
+    "meters": METER_TO_NM_FACTOR,
+    "metre": METER_TO_NM_FACTOR,
+    "metres": METER_TO_NM_FACTOR,
     "nm": 1.0,
     "nanometer": 1.0,
     "nanometers": 1.0,
@@ -548,7 +554,7 @@ def extract_czi_metadata(path):
 
     czi = CziFile(path)
     metadata = {}
-    xml_text = czi.meta
+    xml_text = czi_metadata_xml_text(path, czi) or None
     dims_shape = None
     try:
         dims_shape = czi.dims_shape()
@@ -567,18 +573,49 @@ def extract_czi_metadata(path):
     return metadata
 
 
-def czi_metadata_xml_text(path):
-    if CziFile is None:
-        raise RuntimeError("aicspylibczi is required to read CZI metadata")
+def czi_raw_metadata_xml(path):
+    """Read the XML of the ZISRAWMETADATA segment straight from the CZI file."""
+    import mmap
+    import struct
 
-    xml_text = CziFile(path).meta
-    if xml_text is None:
+    with open(path, "rb") as handle, mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as data:
+        position = data.find(b"ZISRAWMETADATA")
+        if position < 0:
+            return ""
+        # Segment header (32 bytes), then XmlSize at the start of the 256-byte metadata header.
+        xml_size = struct.unpack("<i", data[position + 32:position + 36])[0]
+        start = position + 32 + 256
+        return data[start:start + xml_size].decode("utf-8", errors="replace")
+
+
+def czi_meta_to_text(meta):
+    if meta is None:
         return ""
-    if isinstance(xml_text, ET.Element):
-        return ET.tostring(xml_text, encoding="unicode")
-    if isinstance(xml_text, bytes):
-        return xml_text.decode("utf-8", errors="replace")
-    return str(xml_text)
+    if isinstance(meta, ET.Element):
+        return ET.tostring(meta, encoding="unicode")
+    if isinstance(meta, bytes):
+        return meta.decode("utf-8", errors="replace")
+    if hasattr(meta, "tag"):
+        # aicspylibczi returns an lxml element, which ElementTree cannot parse directly.
+        from lxml import etree
+
+        return etree.tostring(meta, encoding="unicode")
+    return str(meta)
+
+
+def czi_metadata_xml_text(path, czi=None):
+    xml_text = ""
+    try:
+        if czi is None and CziFile is not None:
+            czi = CziFile(path)
+        if czi is not None:
+            xml_text = czi_meta_to_text(czi.meta)
+            ET.fromstring(xml_text)
+    except Exception:
+        xml_text = ""
+    if "<Scaling" not in xml_text:
+        xml_text = czi_raw_metadata_xml(path)
+    return xml_text
 
 
 def extract_tiff_metadata(path):
@@ -834,16 +871,23 @@ def extract_lif_metadata(path):
         except Exception:
             metadata["selected_scene"] = None
 
-    physical_pixel_sizes = getattr(image, "physical_pixel_sizes", None)
-    metadata["x_scale_nm"] = bioio_scale_to_nm(
-        bioio_physical_size(physical_pixel_sizes, "X")
-    )
-    metadata["y_scale_nm"] = bioio_scale_to_nm(
-        bioio_physical_size(physical_pixel_sizes, "Y")
-    )
-    metadata["z_scale_nm"] = bioio_scale_to_nm(
-        bioio_physical_size(physical_pixel_sizes, "Z")
-    )
+    # LIF-level scales are the fallback for scenes without their own; take
+    # each axis from the first scene that has it, not only from scene 0.
+    for scene in scenes or [None]:
+        if scene is not None:
+            try:
+                image.set_scene(scene)
+            except Exception:
+                continue
+        physical_pixel_sizes = getattr(image, "physical_pixel_sizes", None)
+        for axis in ("X", "Y", "Z"):
+            key = f"{axis.lower()}_scale_nm"
+            if metadata.get(key) is None:
+                metadata[key] = bioio_scale_to_nm(bioio_physical_size(physical_pixel_sizes, axis))
+        if all(metadata.get(f"{axis}_scale_nm") is not None for axis in ("x", "y", "z")):
+            break
+    if scenes:
+        image.set_scene(scenes[0])
 
     dims = getattr(image, "dims", None)
     metadata["axes"] = str(dims) if dims is not None else None
