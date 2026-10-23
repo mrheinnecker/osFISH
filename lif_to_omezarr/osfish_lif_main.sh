@@ -7,16 +7,17 @@ timestamp="$(date +%Y-%m-%d_%H-%M)"
 
 mode="${MODE:-interactive}"
 input_lif="${INPUT_LIF:-}"
+input_table="${INPUT_TABLE:-}"
 dataset_name="${DATASET_NAME:-}"
 main_dir="${OSFISH_OMEZARR_DIR:-/scratch/rheinnec/osFISH/lif_to_omezarr}"
 outdir="${OUTDIR:-}"
 logdir="${LOGDIR:-}"
 work_dir="${WORK_DIR:-}"
-s3_bucket="${S3_BUCKET:-s3embl/imatrec/central_data_processing/osfish}"
+uri_from="${URI_FROM:-}"
+uri_to="${URI_TO:-}"
 collection_table_url="${COLLECTION_TABLE_URL:-}"
 collection_table_sheet="${COLLECTION_TABLE_SHEET:-osfish_collection_table}"
 google_key="${GOOGLE_KEY:-${script_dir}/trec-tem-screen-e98a2e03f58b.json}"
-upload="${UPLOAD:-FALSE}"
 zarr_format="${ZARR_FORMAT:-2}"
 eubi_extra_args="${EUBI_EXTRA_ARGS:-}"
 default_x_scale="${DEFAULT_X_SCALE:-}"
@@ -29,19 +30,21 @@ usage() {
   cat <<EOF
 Usage:
   bash osfish_lif_main.sh [local|interactive|cluster] --input_lif /path/to/image.lif [options]
+  bash osfish_lif_main.sh [local|interactive|cluster] --input_table inventory.tsv [options]
 
 Options:
   --input_lif PATH              Single Leica LIF file to convert.
+  --input_table PATH            Inventory TSV from build_run_inventory.py; converts every LIF/CZI/OME-TIFF in it.
   --dataset_name VALUE          Optional output dataset name. Defaults to sanitized LIF basename.
   --main_dir PATH               Base run directory. Default: /scratch/rheinnec/osFISH/lif_to_omezarr.
   --outdir PATH                 Converted-output directory.
   --logdir PATH                 Workflow log directory.
   --work_dir PATH               Nextflow work directory.
-  --s3_bucket VALUE             S3 bucket/prefix for upload and collection-table URI.
+  --uri_from PATH               Cluster path prefix to replace in the collection-table URIs, e.g. /g/schwab.
+  --uri_to PATH                 Replacement prefix as seen by the MoBIE machine, e.g. 'A:\'.
   --collection_table_url URL    Optional Google Sheet URL to write the MoBIE table.
   --collection_table_sheet NAME Google Sheet tab name. Default: osfish_collection_table.
   --google_key PATH             Google service-account JSON key.
-  --upload TRUE|FALSE           Upload OME-Zarr to S3. Default: FALSE.
   --zarr_format VALUE           OME-Zarr format version. Default: 2.
   --eubi_extra_args VALUE       Extra raw arguments appended to eubi to_zarr.
   --default_x_scale VALUE       Fallback X pixel size if missing from LIF metadata.
@@ -107,6 +110,14 @@ while [[ $# -gt 0 ]]; do
       input_lif="${1#*=}"
       shift
       ;;
+    --input_table|--input-table)
+      input_table="${2:?--input_table requires a path}"
+      shift 2
+      ;;
+    --input_table=*|--input-table=*)
+      input_table="${1#*=}"
+      shift
+      ;;
     --dataset_name|--dataset-name)
       dataset_name="${2:?--dataset_name requires a value}"
       shift 2
@@ -147,12 +158,20 @@ while [[ $# -gt 0 ]]; do
       work_dir="${1#*=}"
       shift
       ;;
-    --s3_bucket|--s3-bucket)
-      s3_bucket="${2:?--s3_bucket requires a value}"
+    --uri_from|--uri-from)
+      uri_from="${2:?--uri_from requires a path}"
       shift 2
       ;;
-    --s3_bucket=*|--s3-bucket=*)
-      s3_bucket="${1#*=}"
+    --uri_from=*|--uri-from=*)
+      uri_from="${1#*=}"
+      shift
+      ;;
+    --uri_to|--uri-to)
+      uri_to="${2:?--uri_to requires a path}"
+      shift 2
+      ;;
+    --uri_to=*|--uri-to=*)
+      uri_to="${1#*=}"
       shift
       ;;
     --collection_table_url|--collection-table-url)
@@ -177,14 +196,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --google_key=*|--google-key=*)
       google_key="${1#*=}"
-      shift
-      ;;
-    --upload)
-      upload="$(to_upper_bool "${2:?--upload requires TRUE or FALSE}")"
-      shift 2
-      ;;
-    --upload=*)
-      upload="$(to_upper_bool "${1#*=}")"
       shift
       ;;
     --zarr_format|--zarr-format)
@@ -255,13 +266,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [ -z "$input_lif" ]; then
-  echo "--input_lif is required" >&2
+if [ -n "$input_table" ]; then
+  input_table="$(realpath "$input_table")"
+elif [ -z "$input_lif" ]; then
+  echo "--input_lif or --input_table is required" >&2
   usage
   exit 1
 fi
 
-upload="$(to_upper_bool "$upload")"
 resume="$(to_upper_bool "$resume")"
 outdir="${outdir:-${main_dir}/processed}"
 logdir="${logdir:-${main_dir}/logs/wfOSFISH_LIF_${timestamp}}"
@@ -276,14 +288,15 @@ nextflow_args=(
   -work-dir "$work_dir"
   --script_dir "$script_dir"
   --input_lif "$input_lif"
+  --input_table "$input_table"
   --dataset_name "$dataset_name"
   --outdir "$outdir"
   --logdir "$logdir"
-  --s3_bucket "$s3_bucket"
+  --uri_from "$uri_from"
+  --uri_to "$uri_to"
   --collection_table_url "$collection_table_url"
   --collection_table_sheet "$collection_table_sheet"
   --google_key "$google_key"
-  --upload "$upload"
   --zarr_format "$zarr_format"
   --eubi_extra_args "$eubi_extra_args"
   --default_x_scale "$default_x_scale"

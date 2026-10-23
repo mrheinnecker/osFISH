@@ -1,13 +1,14 @@
 params.input_lif = params.input_lif ?: ""
+params.input_table = params.input_table ?: ""
 params.dataset_name = params.dataset_name ?: ""
 params.script_dir = params.script_dir ?: baseDir.toString()
 params.outdir = params.outdir ?: "osfish_omezarr"
 params.logdir = params.logdir ?: "osfish_logs"
-params.s3_bucket = params.s3_bucket ?: "s3embl/osfish"
+params.uri_from = params.uri_from ?: ""
+params.uri_to = params.uri_to ?: ""
 params.collection_table_url = params.collection_table_url ?: ""
 params.collection_table_sheet = params.collection_table_sheet ?: "osfish_collection_table"
 params.google_key = params.google_key ?: "${params.script_dir}/trec-tem-screen-e98a2e03f58b.json"
-params.upload = params.upload ?: "FALSE"
 params.zarr_format = params.zarr_format ?: 2
 params.default_x_scale = params.default_x_scale ?: ""
 params.default_y_scale = params.default_y_scale ?: ""
@@ -18,7 +19,7 @@ params.eubi_extra_args = params.eubi_extra_args ?: ""
 
 def sanitizeDatasetName(value) {
     def base = new File(value.toString()).getName()
-    base = base.replaceFirst(/(?i)\.lif$/, "")
+    base = base.replaceFirst(/(?i)(\.ome)?\.(lif|czi|tiff?)$/, "")
     base = base.replaceAll(/[^A-Za-z0-9]+/, "_")
     base = base.replaceAll(/^_+|_+$/, "")
     return base ?: "osfish_lif"
@@ -30,6 +31,8 @@ process EXTRACTOSFISHLIFMETADATA {
     cpus 1
     memory "2GB"
     time "20m"
+    errorStrategy "ignore"
+    tag "${dataset_name}"
 
     publishDir "${params.logdir}/metadata", mode:"copy"
     containerOptions "--bind /g --bind /scratch --bind /home"
@@ -61,8 +64,11 @@ process EXTRACTOSFISHLIFMETADATA {
 process CONVERTOSFISHLIFSCENESTOOMEZARR {
 
     cpus 1
-    memory "32GB"
-    time "2h"
+    memory { 32.GB * task.attempt }
+    time { 4.h * task.attempt }
+    errorStrategy { task.attempt < 3 ? "retry" : "ignore" }
+    maxRetries 2
+    tag "${dataset_name}"
 
     publishDir "${params.outdir}", mode:"copy"
     containerOptions "--bind /g --bind /scratch --bind /home"
@@ -81,11 +87,6 @@ process CONVERTOSFISHLIFSCENESTOOMEZARR {
     pixel_scale_x=\$(awk 'NR==2 {print \$1}' "${pixel_size_tsv}")
     pixel_scale_y=\$(awk 'NR==2 {print \$2}' "${pixel_size_tsv}")
     pixel_scale_z=\$(awk 'NR==2 {print \$3}' "${pixel_size_tsv}")
-
-    if [ -z "\$pixel_scale_x" ] || [ -z "\$pixel_scale_y" ] || [ -z "\$pixel_scale_z" ]; then
-      echo "Missing x/y/z scale values for ${dataset_name}; add metadata to the file or pass fallback scales." >&2
-      exit 1
-    fi
 
     rm -rf *.ome.zarr scene_inputs scene_metadata scenes_to_convert.tsv
 
@@ -117,8 +118,17 @@ process CONVERTOSFISHLIFSCENESTOOMEZARR {
     cat scenes_to_convert.tsv
     echo "Extra EuBI args: \${extra_args[*]:-<none>}"
 
-    tail -n +2 scenes_to_convert.tsv | while IFS=\$'\t' read -r scene_dataset scene_index scene_name scene_ome_tiff scene_metadata; do
+    tail -n +2 scenes_to_convert.tsv | while IFS=\$'\t' read -r scene_dataset scene_index scene_name scene_ome_tiff scene_metadata scene_x scene_y scene_z; do
       echo "Converting scene \${scene_index}: \${scene_name} -> \${scene_dataset}.ome.zarr"
+
+      # Scenes in one LIF can have different pixel sizes; LIF-level values are the fallback.
+      scene_x="\${scene_x:-\$pixel_scale_x}"
+      scene_y="\${scene_y:-\$pixel_scale_y}"
+      scene_z="\${scene_z:-\$pixel_scale_z}"
+      if [ -z "\$scene_x" ] || [ -z "\$scene_y" ] || [ -z "\$scene_z" ]; then
+        echo "Missing x/y/z scale values for \${scene_dataset}; add metadata to the file or pass fallback scales." >&2
+        exit 1
+      fi
 
       eubi to_zarr \
         "\${scene_ome_tiff}" \
@@ -126,9 +136,9 @@ process CONVERTOSFISHLIFSCENESTOOMEZARR {
         --x_unit nm \
         --y_unit nm \
         --z_unit nm \
-        --x_scale "\${pixel_scale_x}" \
-        --y_scale "\${pixel_scale_y}" \
-        --z_scale "\${pixel_scale_z}" \
+        --x_scale "\${scene_x}" \
+        --y_scale "\${scene_y}" \
+        --z_scale "\${scene_z}" \
         --dimension_order xyzct \
         --squeeze True \
         --save_omexml True \
@@ -149,41 +159,6 @@ process CONVERTOSFISHLIFSCENESTOOMEZARR {
 }
 
 
-process UPLOADOSFISHOMEZARR {
-
-    cpus 1
-    memory "1GB"
-    time "30m"
-
-    publishDir "${params.logdir}/upload", mode:"copy"
-    containerOptions "--bind /g --bind /scratch --bind /home"
-
-    input:
-    tuple val(dataset_name), path(omezarr), path(metadata_dir)
-
-    output:
-    tuple val(dataset_name), path("scene_metadata"), path("${dataset_name}_s3_upload_done.txt"), emit: uploaded
-
-    script:
-    """
-    set -euo pipefail
-
-    for image_zarr in *.ome.zarr; do
-      if [ ! -d "\${image_zarr}" ]; then
-        continue
-      fi
-      if [ ! -e "\${image_zarr}/.zattrs" ] && [ ! -e "\${image_zarr}/.zgroup" ]; then
-        echo "Could not find an OME-Zarr root marker in \${image_zarr}" >&2
-        exit 1
-      fi
-      scene_dataset="\${image_zarr%.ome.zarr}"
-      mc cp "\${image_zarr}/" "${params.s3_bucket}/\${scene_dataset}.ome.zarr/" --recursive
-    done
-    touch "${dataset_name}_s3_upload_done.txt"
-    """
-}
-
-
 process MAKEOSFISHMOBIETABLE {
 
     cpus 1
@@ -191,22 +166,26 @@ process MAKEOSFISHMOBIETABLE {
     time "10m"
 
     publishDir "${params.logdir}", mode:"copy"
+    publishDir "${params.outdir}", mode:"copy"
     containerOptions "--bind /g --bind /scratch --bind /home"
 
     input:
-    tuple val(dataset_name), path(metadata_dir)
+    path(metadata_dirs, stageAs: "scene_metadata_*")
 
     output:
     path "mobie_collection_table.tsv"
 
     script:
+    inventory_arg = params.input_table ? "--inventory \"${params.input_table}\"" : ""
     """
     set -euo pipefail
 
     python3 "${params.script_dir}/make_mobie_collection_table.py" \
-      --metadata-json "${metadata_dir}" \
-      --dataset-name "${dataset_name}" \
-      --s3-bucket "${params.s3_bucket}" \
+      --metadata-json scene_metadata_* \
+      ${inventory_arg} \
+      --data-dir "${file(params.outdir).toAbsolutePath()}" \
+      --uri-from "${params.uri_from}" \
+      --uri-to "${params.uri_to}" \
       --output "mobie_collection_table.tsv"
     """
 }
@@ -241,25 +220,25 @@ process UPLOADOSFISHMOBIETABLE {
 
 
 workflow {
-    if (!params.input_lif) {
-        error "Missing required parameter: --input_lif /path/to/file.lif"
+    if (params.input_table) {
+        // One row per LIF/CZI/OME-TIFF, as written by build_run_inventory.py.
+        input_ch = Channel
+            .fromPath(params.input_table)
+            .splitCsv(header: true, sep: "\t")
+            .map { row -> tuple(row.dataset_name, row.input_file) }
+    } else if (params.input_lif) {
+        dataset_name = params.dataset_name ?: sanitizeDatasetName(params.input_lif)
+        input_ch = Channel.value(tuple(dataset_name, params.input_lif))
+    } else {
+        error "Missing required parameter: --input_lif /path/to/file.lif or --input_table inventory.tsv"
     }
-
-    dataset_name = params.dataset_name ?: sanitizeDatasetName(params.input_lif)
-    input_ch = Channel.value(tuple(dataset_name, params.input_lif))
 
     EXTRACTOSFISHLIFMETADATA(input_ch)
     CONVERTOSFISHLIFSCENESTOOMEZARR(EXTRACTOSFISHLIFMETADATA.out.metadata)
 
-    upload_enabled = params.upload.toString().toLowerCase() in ["true", "1", "yes"]
-    if (upload_enabled) {
-        UPLOADOSFISHOMEZARR(CONVERTOSFISHLIFSCENESTOOMEZARR.out.omezarr)
-        table_input = UPLOADOSFISHOMEZARR.out.uploaded.map { name, metadata_dir, done -> tuple(name, metadata_dir) }
-        MAKEOSFISHMOBIETABLE(table_input)
-    } else {
-        table_input = CONVERTOSFISHLIFSCENESTOOMEZARR.out.omezarr.map { name, omezarr, metadata_dir -> tuple(name, metadata_dir) }
-        MAKEOSFISHMOBIETABLE(table_input)
-    }
+    metadata_dirs = CONVERTOSFISHLIFSCENESTOOMEZARR.out.omezarr.map { name, omezarr, metadata_dir -> metadata_dir }
+    // One collection table for all LIFs, written after every conversion has finished.
+    MAKEOSFISHMOBIETABLE(metadata_dirs.collect())
 
     if (params.collection_table_url) {
         UPLOADOSFISHMOBIETABLE(MAKEOSFISHMOBIETABLE.out)

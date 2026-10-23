@@ -900,8 +900,9 @@ def merge_overrides(metadata, args):
         "y_scale_nm": to_nm(parse_optional_float(args.y_scale), args.scale_unit),
         "z_scale_nm": to_nm(parse_optional_float(args.z_scale), args.scale_unit),
     }
+    # Launcher scales are fallbacks: they only fill values missing from the file.
     for key, value in overrides.items():
-        if value is not None:
+        if value is not None and metadata.get(key) is None:
             metadata[key] = value
     return metadata
 

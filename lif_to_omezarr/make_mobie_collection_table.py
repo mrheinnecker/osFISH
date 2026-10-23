@@ -8,9 +8,17 @@ from pathlib import Path
 DEFAULT_COLORS = ["red", "green", "yellow", "blue", "magenta", "cyan", "white"]
 
 
-def public_s3_prefix(bucket):
-    bucket_path = re.sub(r"^s3embl/", "", bucket).rstrip("/")
-    return f"https://s3.embl.de/{bucket_path}"
+def image_uri(data_dir, name, uri_from, uri_to):
+    """Path of the OME-Zarr as seen by the MoBIE machine, e.g. /g/schwab/... -> A:\\..."""
+    path = f"{str(data_dir).rstrip('/')}/{name}.ome.zarr"
+    if not uri_from:
+        return path
+    prefix = uri_from.rstrip("/")
+    if path != prefix and not path.startswith(f"{prefix}/"):
+        raise ValueError(f"{path} is not below --uri-from {uri_from}")
+    rest = path[len(prefix):].lstrip("/")
+    separator = "\\" if "\\" in uri_to else "/"
+    return uri_to.rstrip("/\\") + separator + rest.replace("/", separator)
 
 
 def compact(value):
@@ -48,6 +56,11 @@ def metadata_channels(metadata):
                 "label": "channel_0",
                 "display": "channel_0",
                 "color": DEFAULT_COLORS[0],
+                "contrast_limits": "",
+                "excitation_wavelength_nm": "",
+                "emission_wavelength_nm": "",
+                "emission_begin_nm": "",
+                "emission_end_nm": "",
             }
         ]
 
@@ -89,32 +102,63 @@ def near_square_columns(n):
     return columns
 
 
-def load_metadata_rows(path):
-    metadata_path = Path(path)
-    if metadata_path.is_dir():
-        files = sorted(metadata_path.glob("*_metadata.json"))
-    else:
-        files = [metadata_path]
+def load_metadata_rows(paths):
     rows = []
-    for fallback_index, file_path in enumerate(files):
-        metadata = json.loads(file_path.read_text(encoding="utf-8"))
-        metadata.setdefault("grid_index", fallback_index)
-        rows.append(metadata)
+    for path in paths:
+        metadata_path = Path(path)
+        if metadata_path.is_dir():
+            files = sorted(metadata_path.glob("*_metadata.json"))
+        else:
+            files = [metadata_path]
+        for fallback_index, file_path in enumerate(files):
+            metadata = json.loads(file_path.read_text(encoding="utf-8"))
+            metadata.setdefault("grid_index", fallback_index)
+            rows.append(metadata)
     return rows
+
+
+def load_inventory(path):
+    if not path:
+        return {}
+    with Path(path).open(encoding="utf-8", newline="") as handle:
+        return {row["dataset_name"]: row for row in csv.DictReader(handle, delimiter="\t")}
+
+
+def run_name(metadata, inventory_row, fallback):
+    return (inventory_row or {}).get("run") or metadata.get("parent_lif_name") or fallback
+
+
+def assign_grid_positions(metadata_rows, inventory, fallback_view):
+    """Lay out all scenes of one run on one near-square grid, ordered by LIF and scene."""
+    by_run = {}
+    for metadata in metadata_rows:
+        inventory_row = inventory.get(metadata.get("parent_lif_name"))
+        by_run.setdefault(run_name(metadata, inventory_row, fallback_view), []).append(metadata)
+    positions = {}
+    for run, rows in by_run.items():
+        rows.sort(key=lambda row: (str(row.get("parent_lif_name")), int(row.get("grid_index", 0))))
+        columns = near_square_columns(len(rows))
+        for index, metadata in enumerate(rows):
+            positions[metadata["name"]] = (run, f"({index % columns},{index // columns})")
+    return positions
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Create a one-dataset MoBIE collection table from extracted LIF metadata."
+        description="Create one MoBIE collection table, one grid view per run, from extracted LIF scene metadata."
     )
-    parser.add_argument("--metadata-json", required=True)
-    parser.add_argument("--dataset-name", required=True)
-    parser.add_argument("--s3-bucket", required=True)
+    parser.add_argument("--metadata-json", required=True, nargs="+")
+    parser.add_argument("--inventory", default="", help="Inventory TSV from build_run_inventory.py.")
+    parser.add_argument("--dataset-name", default="osFISH", help="View name when no inventory is given.")
+    parser.add_argument("--data-dir", required=True, help="Directory holding the converted OME-Zarr files.")
+    parser.add_argument("--uri-from", default="", help="Path prefix to replace, e.g. /g/schwab.")
+    parser.add_argument("--uri-to", default="", help="Replacement prefix, e.g. 'A:\\'.")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
     metadata_rows = load_metadata_rows(args.metadata_json)
-    grid_columns = near_square_columns(len(metadata_rows))
+    inventory = load_inventory(args.inventory)
+    positions = assign_grid_positions(metadata_rows, inventory, args.dataset_name)
 
     fieldnames = [
         "uri",
@@ -133,6 +177,13 @@ def main():
         "blend",
         "format",
         "exclusive",
+        "run",
+        "run_date",
+        "source_file",
+        "format",
+        "scene",
+        "sample",
+        "condition",
     ]
 
     with Path(args.output).open("w", encoding="utf-8", newline="") as handle:
@@ -140,16 +191,16 @@ def main():
         writer.writeheader()
         for metadata in metadata_rows:
             dataset_name = metadata.get("name") or args.dataset_name
-            grid_index = int(metadata.get("grid_index", 0))
-            grid_position = f"({grid_index % grid_columns},{grid_index // grid_columns})"
-            uri = f"{public_s3_prefix(args.s3_bucket)}/{dataset_name}.ome.zarr/"
+            inventory_row = inventory.get(metadata.get("parent_lif_name")) or {}
+            run, grid_position = positions[dataset_name]
+            uri = image_uri(args.data_dir, dataset_name, args.uri_from, args.uri_to)
             for channel in metadata_channels(metadata):
                 writer.writerow(
                     {
                         "uri": uri,
                         "name": f"{dataset_name}_c{channel['index']}_{channel['display']}",
-                        "view": "osFISH",
-                        "grid": "osFISH",
+                        "view": run,
+                        "grid": run,
                         "grid_position": grid_position,
                         "channel": channel["index"],
                         "display": channel["display"],
@@ -162,6 +213,13 @@ def main():
                         "blend": "sum",
                         "format": "OmeZarr",
                         "exclusive": "TRUE",
+                        "run": run,
+                        "run_date": inventory_row.get("run_date", ""),
+                        "source_file": inventory_row.get("source_file") or Path(str(metadata.get("raw_path", ""))).name,
+                        "format": inventory_row.get("format") or str(metadata.get("source_suffix", "")).lstrip("."),
+                        "scene": metadata.get("selected_scene", ""),
+                        "sample": inventory_row.get("sample", ""),
+                        "condition": inventory_row.get("condition", ""),
                     }
                 )
 
